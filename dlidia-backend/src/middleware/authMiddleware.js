@@ -1,8 +1,8 @@
 import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
 
 // Debe ser exactamente la misma clave que usaste en authController.js
-const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
+dotenv.config();
 
 export const verificarToken = (req, res, next) => {
     // 1. Extraer el token de la cabecera de la petición
@@ -15,10 +15,8 @@ export const verificarToken = (req, res, next) => {
 
     try {
         // 2. Verificar que el token sea auténtico y no haya expirado
-        const usuarioDecodificado = jwt.verify(token, SECRET_KEY);
-        
-        // 3. Adjuntar los datos del usuario a la petición por si los controladores lo necesitan
-        req.usuario = usuarioDecodificado;
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.usuario = decoded;
         
         // 4. Dar permiso para continuar hacia la ruta solicitada
         next();
