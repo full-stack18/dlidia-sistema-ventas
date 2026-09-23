@@ -1,0 +1,8 @@
+# Dependencias
+node_modules/
+
+# Variables de entorno (Secretos y Credenciales)
+.env
+
+# Archivos ocultos del sistema operativo
+.DS_Store
