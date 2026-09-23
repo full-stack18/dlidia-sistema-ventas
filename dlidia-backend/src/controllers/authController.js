@@ -1,9 +1,6 @@
 import jwt from 'jsonwebtoken';
 import * as usuarioRepository from '../repositories/usuarioRepository.js';
 
-// En producción, esta clave secreta debe ir en tu archivo .env
-const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '8h' });
-
 export const login = async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -13,11 +10,11 @@ export const login = async (req, res) => {
             return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
         }
 
-        // Creamos el token con los datos del usuario (sin incluir la contraseña)
+        // 👉 AQUÍ ES DONDE DEBE IR EL TOKEN (porque aquí "usuario" ya existe)
         const token = jwt.sign(
-            { id: usuario.id, username: usuario.username, rol: usuario.rol }, 
-            SECRET_KEY, 
-            { expiresIn: '8h' } // El token expira al terminar el turno (8 horas)
+            { id: usuario.id, username: usuario.username, rol: usuario.rol },
+            process.env.JWT_SECRET,
+            { expiresIn: '8h' }
         );
 
         res.status(200).json({
