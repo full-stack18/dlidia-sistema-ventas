@@ -45,3 +45,15 @@ export const obtenerVentasDelDia = async (fecha) => {
     const result = await pool.query(query, [fecha]);
     return result.rows;
 };
+
+export const obtenerPedidoPorId = async (id) => {
+    const query = 'SELECT * FROM pedidos WHERE id = $1;';
+    const result = await pool.query(query, [id]);
+    return result.rows[0];
+};
+
+export const obtenerEstadoPorId = async (id) => {
+    const query = 'SELECT id, estado, tipo_entrega, total, fecha_creacion FROM pedidos WHERE id = $1;';
+    const result = await pool.query(query, [id]);
+    return result.rows[0];
+};

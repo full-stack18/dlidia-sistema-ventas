@@ -1,16 +1,25 @@
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
 import * as usuarioRepository from '../repositories/usuarioRepository.js';
 
 export const login = async (req, res) => {
     try {
         const { username, password } = req.body;
-        const usuario = await usuarioRepository.buscarUsuarioPorUsername(username);
 
-        if (!usuario || usuario.password !== password) {
+        if (!username || !password) {
+            return res.status(400).json({ error: 'Usuario y contraseña son obligatorios' });
+        }
+
+        const usuario = await usuarioRepository.buscarUsuarioPorUsername(username);
+        if (!usuario) {
             return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
         }
 
-        // 👉 AQUÍ ES DONDE DEBE IR EL TOKEN (porque aquí "usuario" ya existe)
+        const passwordValida = await bcrypt.compare(password, usuario.password);
+        if (!passwordValida) {
+            return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
+        }
+
         const token = jwt.sign(
             { id: usuario.id, username: usuario.username, rol: usuario.rol },
             process.env.JWT_SECRET,

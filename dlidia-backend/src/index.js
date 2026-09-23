@@ -12,9 +12,9 @@ dotenv.config();
 
 const app = express();
 const httpServer = createServer(app);
-const io = new Server(httpServer, {
-    cors: { origin: '*' }
-});
+const ORIGEN_PERMITIDO = process.env.FRONTEND_URL || 'http://localhost:3000';
+app.use(cors({ origin: ORIGEN_PERMITIDO }));
+const io = new Server(httpServer, { cors: { origin: ORIGEN_PERMITIDO } });
 
 app.use(cors());
 app.use(express.json());

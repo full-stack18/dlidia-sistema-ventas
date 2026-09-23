@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import AdminNav from '../../components/AdminNav';
 import * as jwtDecodeModule from 'jwt-decode';
+import { API_URL } from '@/lib/api';
 
 interface Venta {
   id: number;
@@ -12,12 +13,11 @@ interface Venta {
 }
 
 const obtenerFechaLocal = () => {
-    // Método 100% infalible: extraemos los números exactos del reloj de tu PC
     const hoy = new Date();
     const año = hoy.getFullYear();
     const mes = String(hoy.getMonth() + 1).padStart(2, '0');
     const dia = String(hoy.getDate()).padStart(2, '0');
-    
+
     return `${año}-${mes}-${dia}`;
   };
 
@@ -37,7 +37,6 @@ export default function CuadreCaja() {
 
     try {
       const decoded: any = (jwtDecodeModule as any).jwtDecode(token);
-      // Solo Cajeros y Administradoras pueden ver la caja
       if (decoded.rol !== 'Cajero' && decoded.rol !== 'Administradora') {
         setAutorizado(false);
         return;
@@ -54,7 +53,7 @@ export default function CuadreCaja() {
     setCargando(true);
     const token = localStorage.getItem('dlidia_token');
     try {
-      const res = await fetch(`http://localhost:3001/api/pedidos/caja?fecha=${fecha}`, {
+      const res = await fetch(`${API_URL}/api/pedidos/caja?fecha=${fecha}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -77,18 +76,18 @@ export default function CuadreCaja() {
     <div className="bg-gray-100 min-h-screen font-sans pb-10">
       <div className="p-8">
         <AdminNav />
-        
+
         <div className="max-w-6xl mx-auto mt-8 animate-fade-in-up">
           <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
             <div>
               <h1 className="text-3xl font-extrabold text-gray-900">Cuadre de Caja</h1>
               <p className="text-gray-500 font-medium">Revisión de ingresos diarios</p>
             </div>
-            
+
             <div className="flex items-center gap-4">
               <label className="font-bold text-gray-700">Fecha:</label>
-              <input 
-                type="date" 
+              <input
+                type="date"
                 value={fecha}
                 onChange={(e) => setFecha(e.target.value)}
                 className="border-2 border-gray-300 rounded-lg p-2 font-bold text-gray-800 focus:border-red-600 focus:ring-0"

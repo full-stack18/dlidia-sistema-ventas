@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { socket } from '../../lib/socket';
+import { API_URL } from '@/lib/api';
 
 interface Pedido {
   id: number;
@@ -22,12 +23,12 @@ export default function MotorizadoApp() {
       }
 
       try {
-        const res = await fetch('http://localhost:3001/api/pedidos/delivery', {
+        const res = await fetch(`${API_URL}/api/pedidos/delivery`, {
           headers: {
-            'Authorization': `Bearer ${token}` // Enviamos el pase VIP
+            'Authorization': `Bearer ${token}`
           }
         });
-        
+
         const data = await res.json();
         if (res.ok) {
           setPedidos(data);
@@ -40,7 +41,6 @@ export default function MotorizadoApp() {
     };
     cargarRuta();
 
-    // 2. Escuchar cambios (por si la cocina marca un delivery como preparado)
     socket.connect();
     socket.on('estado_actualizado', (pedidoActualizado) => {
       if (pedidoActualizado.tipo_entrega === 'Delivery') {
@@ -64,15 +64,21 @@ export default function MotorizadoApp() {
 
   const marcarEntregado = async (id: number) => {
     const token = localStorage.getItem('dlidia_token');
-    await fetch(`http://localhost:3001/api/pedidos/${id}`, {
+    const res = await fetch(`${API_URL}/api/pedidos/${id}`, {
       method: 'PUT',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({ estado: 'Entregado' })
     });
-    setPedidos(prev => prev.filter(p => p.id !== id));
+
+    if (res.ok) {
+      setPedidos(prev => prev.filter(p => p.id !== id));
+    } else {
+      const data = await res.json();
+      alert(data.error || 'No se pudo confirmar la entrega.');
+    }
   };
 
   if (!autorizado) {
@@ -115,8 +121,8 @@ export default function MotorizadoApp() {
                 </span>
               </div>
               <p className="text-gray-600 text-sm mb-1">Cobrar: <strong className="text-green-600 text-base">S/ {Number(pedido.total).toFixed(2)}</strong></p>
-              
-              <button 
+
+              <button
                 onClick={() => marcarEntregado(pedido.id)}
                 className="mt-4 w-full bg-green-500 text-white py-3 rounded-lg font-bold text-lg active:bg-green-600 shadow"
               >

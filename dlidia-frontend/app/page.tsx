@@ -1,5 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { API_URL } from '@/lib/api';
 
 interface Plato {
   id: number;
@@ -15,11 +17,12 @@ interface ItemCarrito extends Plato {
 }
 
 export default function PortalCliente() {
+  const router = useRouter();
   const [menu, setMenu] = useState<Plato[]>([]);
   const [carrito, setCarrito] = useState<ItemCarrito[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [categoriaActiva, setCategoriaActiva] = useState('Todos');
-  
+
   const [tipoEntrega, setTipoEntrega] = useState('Delivery');
   const [nombreCliente, setNombreCliente] = useState('');
   const [telefonoCliente, setTelefonoCliente] = useState('');
@@ -28,7 +31,7 @@ export default function PortalCliente() {
   useEffect(() => {
     const cargarCarta = async () => {
       try {
-        const res = await fetch('http://localhost:3001/api/platos');
+        const res = await fetch(`${API_URL}/api/platos`);
         const data = await res.json();
         setMenu(data);
       } catch (error) {
@@ -63,7 +66,7 @@ export default function PortalCliente() {
 
     setEnviando(true);
     try {
-      const res = await fetch('http://localhost:3001/api/pedidos', {
+      const res = await fetch(`${API_URL}/api/pedidos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -78,11 +81,12 @@ export default function PortalCliente() {
       });
 
       if (res.ok) {
-        alert('¡Pedido enviado con éxito a la cocina!');
+        const data = await res.json();
         setCarrito([]);
         setNombreCliente('');
         setTelefonoCliente('');
         setDireccionEntrega('');
+        router.push(`/seguimiento/${data.pedido.id}`);
       } else {
         alert('Hubo un error al procesar tu pedido.');
       }
@@ -98,7 +102,6 @@ export default function PortalCliente() {
 
   return (
     <div className="bg-[#f8f5f2] min-h-screen pb-12">
-      {/* Top Navbar Oscuro - Colores del Logo */}
       <nav className="bg-[#1a1210] text-[#f8f5f2] p-4 flex justify-between items-center shadow-lg border-b-4 border-[#7A1010]">
         <div className="flex items-center gap-3">
           <img src="/logo.jpg" alt="Logo D' Lidia" className="h-14 w-14 rounded-full border-2 border-[#DCA11D] object-cover bg-white" />
@@ -116,7 +119,6 @@ export default function PortalCliente() {
         </div>
       </nav>
 
-      {/* Hero Banner Granate */}
       <div className="bg-linear-to-r from-[#5a0c0c] to-[#7A1010] text-white pt-10 pb-16 px-8 text-center sm:text-left sm:px-16 flex flex-col sm:flex-row items-center justify-between shadow-inner">
         <div className="max-w-xl">
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4 leading-tight drop-shadow-md">
@@ -127,12 +129,11 @@ export default function PortalCliente() {
           </p>
         </div>
       </div>
-      
-      {/* Filtros de Categorías */}
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 mb-8">
         <div className="flex gap-4 overflow-x-auto py-2 hide-scroll-bar">
           {categoriasUnicas.map(cat => (
-            <button 
+            <button
               key={cat}
               onClick={() => setCategoriaActiva(cat)}
               className={`shrink-0 px-6 py-3 rounded-xl font-bold shadow-md transition-all flex flex-col items-center gap-2 min-w-24
@@ -144,15 +145,14 @@ export default function PortalCliente() {
           ))}
         </div>
       </div>
-      
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col lg:flex-row gap-8">
-        
-        {/* Catálogo de Platos */}
+
         <div className="flex-1">
           <h2 className="text-2xl font-bold text-[#1a1210] mb-6 flex items-center gap-2">
             <span className="text-[#DCA11D]">🔖</span> Nuestro Catálogo
           </h2>
-          
+
           {menuFiltrado.length === 0 ? (
             <div className="flex justify-center py-12 text-gray-500 font-bold">Cargando platos...</div>
           ) : (
@@ -160,8 +160,8 @@ export default function PortalCliente() {
               {menuFiltrado.map((plato) => (
                 <div key={plato.id} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all border border-gray-100 flex flex-col">
                   <div className="h-48 w-full bg-gray-200 relative border-b-4 border-[#DCA11D]">
-                    <img 
-                      src={plato.imagen_url || '/platos/default.jpg'} 
+                    <img
+                      src={plato.imagen_url || '/platos/default.jpg'}
                       alt={plato.nombre}
                       className="w-full h-full object-cover"
                     />
@@ -173,7 +173,7 @@ export default function PortalCliente() {
                     </div>
                     <div className="flex items-center justify-between mt-auto">
                       <p className="font-extrabold text-[#7A1010] text-xl">S/ {Number(plato.precio).toFixed(2)}</p>
-                      <button 
+                      <button
                         onClick={() => agregarAlCarrito(plato)}
                         className="bg-[#DCA11D] text-[#1a1210] font-extrabold px-4 py-2 rounded-lg hover:bg-yellow-500 transition flex items-center gap-2 shadow"
                       >
@@ -187,13 +187,12 @@ export default function PortalCliente() {
           )}
         </div>
 
-        {/* Panel del Carrito (Sticky) */}
         <div className="w-full lg:w-96 shrink-0">
           <div className="bg-white p-6 rounded-2xl shadow-xl border-t-8 border-[#7A1010] sticky top-6">
             <h2 className="text-xl font-bold text-[#1a1210] mb-4 flex items-center gap-2 border-b border-gray-200 pb-3">
               <span>🛒</span> Tu Pedido
             </h2>
-            
+
             <div className="min-h-40 max-h-72 overflow-y-auto mb-4 pr-2">
               {carrito.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-gray-400 py-8">
@@ -215,13 +214,12 @@ export default function PortalCliente() {
               )}
             </div>
 
-            {/* Fomulario - Alto Contraste */}
             <div className="space-y-4 mb-6">
               <div>
                 <label className="block text-xs font-bold text-[#1a1210] mb-1 uppercase tracking-wide">Tipo de Entrega</label>
-                <select 
-                  value={tipoEntrega} 
-                  onChange={(e) => setTipoEntrega(e.target.value)} 
+                <select
+                  value={tipoEntrega}
+                  onChange={(e) => setTipoEntrega(e.target.value)}
                   className="w-full border-2 border-gray-300 rounded-lg text-[#1a1210] font-bold bg-white p-2.5 focus:border-[#7A1010] focus:outline-none"
                 >
                   <option value="Mesa">Consumo en salón (Mesa)</option>
@@ -232,12 +230,12 @@ export default function PortalCliente() {
 
               <div>
                 <label className="block text-xs font-bold text-[#1a1210] mb-1 uppercase tracking-wide">Tu Nombre</label>
-                <input 
-                  type="text" 
-                  value={nombreCliente} 
-                  onChange={(e) => setNombreCliente(e.target.value)} 
-                  placeholder="Ej. Juan Pérez" 
-                  className="w-full border-2 border-gray-300 rounded-lg text-[#1a1210] font-bold bg-white p-2.5 placeholder-gray-400 focus:border-[#7A1010] focus:outline-none" 
+                <input
+                  type="text"
+                  value={nombreCliente}
+                  onChange={(e) => setNombreCliente(e.target.value)}
+                  placeholder="Ej. Juan Pérez"
+                  className="w-full border-2 border-gray-300 rounded-lg text-[#1a1210] font-bold bg-white p-2.5 placeholder-gray-400 focus:border-[#7A1010] focus:outline-none"
                 />
               </div>
 
@@ -245,35 +243,35 @@ export default function PortalCliente() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="col-span-2 sm:col-span-1">
                     <label className="block text-xs font-bold text-[#1a1210] mb-1 uppercase tracking-wide">Celular</label>
-                    <input 
-                      type="text" 
-                      value={telefonoCliente} 
-                      onChange={(e) => setTelefonoCliente(e.target.value)} 
-                      placeholder="987654321" 
-                      className="w-full border-2 border-gray-300 rounded-lg text-[#1a1210] font-bold bg-white p-2.5 placeholder-gray-400 focus:border-[#7A1010] focus:outline-none" 
+                    <input
+                      type="text"
+                      value={telefonoCliente}
+                      onChange={(e) => setTelefonoCliente(e.target.value)}
+                      placeholder="987654321"
+                      className="w-full border-2 border-gray-300 rounded-lg text-[#1a1210] font-bold bg-white p-2.5 placeholder-gray-400 focus:border-[#7A1010] focus:outline-none"
                     />
                   </div>
                   <div className="col-span-2 sm:col-span-1">
                     <label className="block text-xs font-bold text-[#1a1210] mb-1 uppercase tracking-wide">Dirección</label>
-                    <input 
-                      type="text" 
-                      value={direccionEntrega} 
-                      onChange={(e) => setDireccionEntrega(e.target.value)} 
-                      placeholder="Calle, Mz, Lote" 
-                      className="w-full border-2 border-gray-300 rounded-lg text-[#1a1210] font-bold bg-white p-2.5 placeholder-gray-400 focus:border-[#7A1010] focus:outline-none" 
+                    <input
+                      type="text"
+                      value={direccionEntrega}
+                      onChange={(e) => setDireccionEntrega(e.target.value)}
+                      placeholder="Calle, Mz, Lote"
+                      className="w-full border-2 border-gray-300 rounded-lg text-[#1a1210] font-bold bg-white p-2.5 placeholder-gray-400 focus:border-[#7A1010] focus:outline-none"
                     />
                   </div>
                 </div>
               )}
             </div>
-            
+
             <div className="border-t-2 border-dashed border-gray-300 pt-4">
               <div className="flex justify-between items-end mb-4">
                 <span className="font-bold text-gray-600 text-sm uppercase">Total a Pagar</span>
                 <span className="font-extrabold text-3xl text-[#7A1010]">S/ {total.toFixed(2)}</span>
               </div>
-              
-              <button 
+
+              <button
                 onClick={enviarPedido}
                 disabled={carrito.length === 0 || enviando}
                 className={`w-full py-4 rounded-xl font-extrabold text-white text-lg transition-all shadow-md
@@ -286,7 +284,6 @@ export default function PortalCliente() {
         </div>
       </div>
 
-      {/* Footer */}
       <div className="max-w-7xl mx-auto px-4 mt-16 pb-8 border-t border-gray-300 pt-8 flex flex-col md:flex-row justify-between items-center text-gray-700 font-bold text-sm gap-4">
         <div className="flex gap-6">
           <span className="flex items-center gap-2">🥬 Ingredientes Frescos</span>

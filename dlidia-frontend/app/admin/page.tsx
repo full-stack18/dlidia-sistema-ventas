@@ -2,6 +2,7 @@
 import * as jwtDecodeModule from 'jwt-decode';
 import { useEffect, useState } from 'react';
 import AdminNav from '../../components/AdminNav';
+import { API_URL } from '@/lib/api';
 
 interface Plato {
   id: number;
@@ -16,7 +17,6 @@ export default function PanelAdministradora() {
   const [autorizado, setAutorizado] = useState(true);
   const [editando, setEditando] = useState<Plato | null>(null);
 
-  // Estados del formulario
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [precio, setPrecio] = useState('');
@@ -30,10 +30,7 @@ export default function PanelAdministradora() {
     }
 
     try {
-      // Extraemos la información del token
       const decoded: any = (jwtDecodeModule as any).jwtDecode(token);
-
-      // REGLA ESTRICTA: Si no es la Administradora, lo botamos
       if (decoded.rol !== 'Administradora') {
         setAutorizado(false);
         return;
@@ -48,7 +45,7 @@ export default function PanelAdministradora() {
 
   const cargarPlatos = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/platos');
+      const res = await fetch(`${API_URL}/api/platos`);
       const data = await res.json();
       setPlatos(data);
     } catch (error) {
@@ -59,7 +56,7 @@ export default function PanelAdministradora() {
   const guardarPlato = async (e: React.FormEvent) => {
     e.preventDefault();
     const token = localStorage.getItem('dlidia_token');
-    const url = editando ? `http://localhost:3001/api/platos/${editando.id}` : 'http://localhost:3001/api/platos';
+    const url = editando ? `${API_URL}/api/platos/${editando.id}` : `${API_URL}/api/platos`;
     const method = editando ? 'PUT' : 'POST';
 
     await fetch(url, {
@@ -71,7 +68,6 @@ export default function PanelAdministradora() {
       body: JSON.stringify({ nombre, descripcion, precio: Number(precio), categoria })
     });
 
-    // Limpiar formulario y recargar la vista
     setNombre('');
     setDescripcion('');
     setPrecio('');
@@ -84,7 +80,7 @@ export default function PanelAdministradora() {
     if (!confirm('¿Seguro que deseas ocultar este plato del E-commerce?')) return;
     const token = localStorage.getItem('dlidia_token');
 
-    await fetch(`http://localhost:3001/api/platos/${id}`, {
+    await fetch(`${API_URL}/api/platos/${id}`, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${token}` }
     });
@@ -111,7 +107,6 @@ export default function PanelAdministradora() {
       </h1>
 
       <div className="flex flex-col md:flex-row gap-8">
-        {/* Formulario CRUD */}
         <div className="w-full md:w-1/3 bg-white p-6 rounded-xl shadow-lg h-fit border-t-4 border-red-600">
           <h2 className="text-xl font-bold mb-4 text-gray-800">{editando ? 'Editar Plato Existente' : 'Registrar Nuevo Plato'}</h2>
           <form onSubmit={guardarPlato} className="space-y-4">
@@ -147,7 +142,6 @@ export default function PanelAdministradora() {
           </form>
         </div>
 
-        {/* Listado en Vivo */}
         <div className="flex-1">
           <div className="grid gap-4">
             {platos.map((plato) => (
