@@ -11,8 +11,8 @@ export const obtenerPlatos = async (req, res) => {
 
 export const crear = async (req, res) => {
     try {
-        const { nombre, descripcion, precio, categoria } = req.body;
-        const nuevoPlato = await platoRepository.crearPlato(nombre, descripcion, precio, categoria);
+        const { nombre, descripcion, precio, categoria, imagen_url } = req.body;
+        const nuevoPlato = await platoRepository.crearPlato(nombre, descripcion, precio, categoria, imagen_url);
         res.status(201).json(nuevoPlato);
     } catch (error) {
         res.status(500).json({ error: 'Error al crear el plato' });
@@ -22,8 +22,8 @@ export const crear = async (req, res) => {
 export const actualizar = async (req, res) => {
     try {
         const { id } = req.params;
-        const { nombre, descripcion, precio, categoria } = req.body;
-        const platoEditado = await platoRepository.actualizarPlato(id, nombre, descripcion, precio, categoria);
+        const { nombre, descripcion, precio, categoria, imagen_url } = req.body;
+        const platoEditado = await platoRepository.actualizarPlato(id, nombre, descripcion, precio, categoria, imagen_url);
         res.status(200).json(platoEditado);
     } catch (error) {
         res.status(500).json({ error: 'Error al actualizar el plato' });

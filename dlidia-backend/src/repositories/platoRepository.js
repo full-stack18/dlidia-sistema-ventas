@@ -6,15 +6,17 @@ export const obtenerPlatosActivos = async () => {
     return result.rows;
 };
 
-export const crearPlato = async (nombre, descripcion, precio, categoria) => {
-    const query = 'INSERT INTO platos (nombre, descripcion, precio, categoria, disponible) VALUES ($1, $2, $3, $4, true) RETURNING *;';
-    const result = await pool.query(query, [nombre, descripcion, precio, categoria]);
+export const crearPlato = async (nombre, descripcion, precio, categoria, imagen_url) => {
+    const query = 'INSERT INTO platos (nombre, descripcion, precio, categoria, imagen_url, disponible) VALUES ($1, $2, $3, $4, $5, true) RETURNING *;';
+    // Si no envían imagen, le ponemos la de por defecto
+    const img = imagen_url || '/platos/default.jpg'; 
+    const result = await pool.query(query, [nombre, descripcion, precio, categoria, img]);
     return result.rows[0];
 };
 
-export const actualizarPlato = async (id, nombre, descripcion, precio, categoria) => {
-    const query = 'UPDATE platos SET nombre = $1, descripcion = $2, precio = $3, categoria = $4 WHERE id = $5 RETURNING *;';
-    const result = await pool.query(query, [nombre, descripcion, precio, categoria, id]);
+export const actualizarPlato = async (id, nombre, descripcion, precio, categoria, imagen_url) => {
+    const query = 'UPDATE platos SET nombre = $1, descripcion = $2, precio = $3, categoria = $4, imagen_url = $5 WHERE id = $6 RETURNING *;';
+    const result = await pool.query(query, [nombre, descripcion, precio, categoria, imagen_url, id]);
     return result.rows[0];
 };
 

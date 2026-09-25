@@ -7,9 +7,10 @@ import { API_URL } from '@/lib/api';
 interface Plato {
   id: number;
   nombre: string;
-  descripcion: string;
+  descripcion?: string;
   precio: number;
   categoria: string;
+  imagen_url?: string; // <-- AÑADE ESTA LÍNEA AQUÍ
 }
 
 export default function PanelAdministradora() {
@@ -21,6 +22,7 @@ export default function PanelAdministradora() {
   const [descripcion, setDescripcion] = useState('');
   const [precio, setPrecio] = useState('');
   const [categoria, setCategoria] = useState('Pollería');
+  const [imagenUrl, setImagenUrl] = useState('/platos/default.jpg');
 
   useEffect(() => {
     const token = localStorage.getItem('dlidia_token');
@@ -65,7 +67,13 @@ export default function PanelAdministradora() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({ nombre, descripcion, precio: Number(precio), categoria })
+      body: JSON.stringify({ 
+        nombre, 
+        descripcion, 
+        precio: Number(precio), 
+        categoria, 
+        imagen_url: imagenUrl // <-- ENVIAMOS LA IMAGEN AL BACKEND
+      })
     });
 
     setNombre('');
@@ -73,6 +81,7 @@ export default function PanelAdministradora() {
     setPrecio('');
     setCategoria('Pollería');
     setEditando(null);
+    setImagenUrl('/platos/default.jpg');
     cargarPlatos();
   };
 
@@ -87,12 +96,13 @@ export default function PanelAdministradora() {
     cargarPlatos();
   };
 
-  const editarPlato = (plato: Plato) => {
+ const editarPlato = (plato: Plato) => {
     setEditando(plato);
     setNombre(plato.nombre);
     setDescripcion(plato.descripcion || '');
     setPrecio(plato.precio.toString());
     setCategoria(plato.categoria);
+    setImagenUrl(plato.imagen_url || '/platos/default.jpg'); // <-- CARGAMOS LA IMAGEN
   };
 
   if (!autorizado) {
@@ -130,6 +140,17 @@ export default function PanelAdministradora() {
                 <option value="Bebidas">Bebidas</option>
                 <option value="Extras">Extras</option>
               </select>
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-1">URL de la Imagen</label>
+              <input 
+                type="text" 
+                value={imagenUrl} 
+                onChange={(e) => setImagenUrl(e.target.value)} 
+                className="w-full border p-2 rounded text-gray-900" 
+                placeholder="Ej. /platos/pollo.jpg o https://..." 
+              />
+              <p className="text-xs text-gray-500 mt-1">Sube la foto a la carpeta public/platos y escribe aquí su nombre, o pega un link web.</p>
             </div>
             <button type="submit" className="w-full bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-700 shadow mt-2">
               {editando ? 'Actualizar Precio/Datos' : 'Guardar en Catálogo'}
