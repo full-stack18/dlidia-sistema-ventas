@@ -11,6 +11,14 @@ interface EstadoPedido {
   tipo_entrega: string;
   total: number;
   fecha_creacion: string;
+  detalles: DetallePedido[];
+}
+
+interface DetallePedido {
+  nombre: string;
+  cantidad: number;
+  precio_unitario: number;
+  subtotal: number;
 }
 
 const PASOS = ['Pendiente', 'En Preparación', 'Entregado'];
@@ -113,6 +121,24 @@ export default function SeguimientoPedido() {
           <p className="text-center text-green-700 font-bold bg-green-50 rounded-lg py-3 mb-6">
             ✅ ¡Pedido entregado! Gracias por tu compra.
           </p>
+        )}
+
+        {pedido.detalles?.length > 0 && (
+          <div className="border-t border-dashed border-gray-300 pt-4 mb-4">
+            <p className="text-xs text-gray-400 font-bold uppercase mb-2">Detalle del pedido</p>
+            <ul className="space-y-2">
+              {pedido.detalles.map((detalle, indice) => (
+                <li key={`${detalle.nombre}-${indice}`} className="flex justify-between gap-3 text-sm">
+                  <span className="font-semibold text-[#1a1210]">
+                    {detalle.cantidad}x {detalle.nombre}
+                  </span>
+                  <span className="font-bold text-gray-600">
+                    S/ {Number(detalle.subtotal).toFixed(2)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         <div className="border-t border-dashed border-gray-300 pt-4 flex justify-between items-center">

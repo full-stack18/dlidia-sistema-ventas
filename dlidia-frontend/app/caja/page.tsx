@@ -10,6 +10,14 @@ interface Venta {
   tipo_entrega: string;
   total: number;
   fecha_creacion: string;
+  detalles: DetalleVenta[];
+}
+
+interface DetalleVenta {
+  id: number;
+  nombre: string;
+  cantidad: number;
+  subtotal: number;
 }
 
 const obtenerFechaLocal = () => {
@@ -112,7 +120,7 @@ export default function CuadreCaja() {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-x-auto">
             {cargando ? (
               <div className="p-10 text-center text-gray-500 font-bold animate-pulse">Consultando base de datos...</div>
             ) : ventas.length === 0 ? (
@@ -125,6 +133,7 @@ export default function CuadreCaja() {
                     <th className="p-4 font-bold">Hora</th>
                     <th className="p-4 font-bold">Tipo Entrega</th>
                     <th className="p-4 font-bold">Origen</th>
+                    <th className="p-4 font-bold">Productos</th>
                     <th className="p-4 font-bold text-right">Total (S/)</th>
                   </tr>
                 </thead>
@@ -141,6 +150,19 @@ export default function CuadreCaja() {
                         </span>
                       </td>
                       <td className="p-4 text-gray-600">{venta.origen}</td>
+                      <td className="p-4 text-gray-600 min-w-52">
+                        {venta.detalles?.length > 0 ? (
+                          <ul className="space-y-1">
+                            {venta.detalles.map((detalle) => (
+                              <li key={detalle.id} className="text-sm">
+                                {detalle.cantidad}x {detalle.nombre}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <span className="text-xs italic text-gray-400">Sin detalle histórico</span>
+                        )}
+                      </td>
                       <td className="p-4 font-extrabold text-green-600 text-right">S/ {Number(venta.total).toFixed(2)}</td>
                     </tr>
                   ))}

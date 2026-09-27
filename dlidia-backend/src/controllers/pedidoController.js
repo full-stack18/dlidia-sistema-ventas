@@ -9,7 +9,9 @@ export const crearPedido = async (req, res) => {
         });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: 'Error al crear el pedido', detalle: error.message });
+        res.status(error.status || 500).json({
+            error: error.status ? error.message : 'Error al crear el pedido'
+        });
     }
 };
 

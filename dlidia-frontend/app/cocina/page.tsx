@@ -11,6 +11,17 @@ interface Pedido {
   tipo_entrega: string;
   total: number;
   estado: string;
+  detalles: DetallePedido[];
+}
+
+interface DetallePedido {
+  id: number;
+  plato_id: number;
+  nombre: string;
+  cantidad: number;
+  precio_unitario: number;
+  subtotal: number;
+  observaciones?: string | null;
 }
 
 export default function PanelAdministrativo() {
@@ -140,6 +151,23 @@ export default function PanelAdministrativo() {
 
             <p className="text-gray-600">Origen: {pedido.origen}</p>
             <p className="text-gray-600">Entrega: {pedido.tipo_entrega}</p>
+            {pedido.detalles?.length > 0 && (
+              <div className="mt-3 rounded-lg bg-gray-50 border border-gray-200 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Productos</p>
+                <ul className="space-y-2">
+                  {pedido.detalles.map((detalle) => (
+                    <li key={detalle.id} className="flex justify-between gap-3 text-sm">
+                      <span className="font-semibold text-gray-800">
+                        {detalle.cantidad}x {detalle.nombre}
+                      </span>
+                      <span className="font-bold text-gray-600">
+                        S/ {Number(detalle.subtotal).toFixed(2)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <p className="font-bold text-green-600 mt-2 text-lg">Total: S/ {Number(pedido.total).toFixed(2)}</p>
 
             <div className="mt-4 flex gap-2">

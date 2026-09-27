@@ -70,13 +70,14 @@ export default function PortalCliente() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          usuarioId: null,
-          origen: 'Portal Web',
           tipoEntrega,
-          total,
           nombreCliente,
           telefonoCliente,
-          direccionEntrega: tipoEntrega === 'Delivery' ? direccionEntrega : null
+          direccionEntrega: tipoEntrega === 'Delivery' ? direccionEntrega : null,
+          items: carrito.map((item) => ({
+            platoId: item.id,
+            cantidad: item.cantidad
+          }))
         })
       });
 
@@ -88,7 +89,8 @@ export default function PortalCliente() {
         setDireccionEntrega('');
         router.push(`/seguimiento/${data.pedido.id}`);
       } else {
-        alert('Hubo un error al procesar tu pedido.');
+        const data = await res.json();
+        alert(data.error || 'Hubo un error al procesar tu pedido.');
       }
     } catch (error) {
       alert('Error de conexión.');
