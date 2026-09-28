@@ -1,5 +1,9 @@
 import * as pedidoRepository from '../repositories/pedidoRepository.js';
 import { normalizarItemsPedido } from '../utils/pedidoRules.js';
+import {
+    ESTADOS_PEDIDO,
+    validarCambioEstado
+} from '../utils/pedidoStateMachine.js';
 
 export const procesarNuevoPedido = async (datosPedido, io) => {
     const { tipoEntrega, nombreCliente, telefonoCliente, direccionEntrega } = datosPedido;
@@ -32,63 +36,6 @@ export const procesarNuevoPedido = async (datosPedido, io) => {
 
     const itemsNormalizados = normalizarItemsPedido(datosPedido.items);
 
-    if (datosPedido.items.length > 50) {
-        const observaciones = item.observaciones ?? null;
-
-        if (
-            observaciones !== null &&
-            (typeof observaciones !== 'string' || observaciones.length > 500)
-        ) {
-            const error = new Error(
-                'Las observaciones deben ser texto de hasta 500 caracteres'
-            );
-            error.status = 400;
-            throw error;
-        }
-    }
-
-    const itemsAgrupados = new Map();
-    for (const item of datosPedido.items) {
-        if (!item || typeof item !== 'object') {
-            const error = new Error('El formato de los productos del pedido no es válido');
-            error.status = 400;
-            throw error;
-        }
-        const platoId = Number(item.platoId);
-        const cantidad = Number(item.cantidad);
-        if (!Number.isInteger(platoId) || platoId <= 0 || !Number.isInteger(cantidad) || cantidad <= 0 || cantidad > 99) {
-            const error = new Error('Cada plato debe tener un identificador válido y una cantidad entre 1 y 99');
-            error.status = 400;
-            throw error;
-        }
-
-        const observaciones = item.observaciones ?? null;
-
-        if (
-            observaciones !== null &&
-            (typeof observaciones !== 'string' || observaciones.length > 500)
-        ) {
-            const error = new Error(
-                'Las observaciones deben ser texto de hasta 500 caracteres'
-            );
-            error.status = 400;
-            throw error;
-        }
-
-        const existente = itemsAgrupados.get(platoId);
-        const cantidadTotal = (existente?.cantidad || 0) + cantidad;
-        if (cantidadTotal > 99) {
-            const error = new Error('La cantidad acumulada de un plato no puede superar 99 unidades');
-            error.status = 400;
-            throw error;
-        }
-
-        itemsAgrupados.set(platoId, {
-            platoId,
-            cantidad: cantidadTotal,
-            observaciones: observaciones?.trim() || null
-        });
-    }
 
     const nuevoPedido = await pedidoRepository.guardarPedidoConDetalles({
         usuarioId: null,
@@ -108,7 +55,7 @@ export const listarPedidos = async () => {
     return await pedidoRepository.obtenerTodosLosPedidos();
 };
 
-export const cambiarEstadoPedido = async (id, nuevoEstado, io, usuarioRol) => {
+export const cambiarEstadoPedido = async (id, nuevoEstado, io, usuarioRol, usuarioId) => {
     const pedidoActual = await pedidoRepository.obtenerPedidoPorId(id);
     if (!pedidoActual) {
         const err = new Error('Pedido no encontrado');
@@ -125,13 +72,19 @@ export const cambiarEstadoPedido = async (id, nuevoEstado, io, usuarioRol) => {
         }
     }
 
-    const pedidoActualizado = await pedidoRepository.actualizarEstado(id, nuevoEstado);
+    const pedidoActualizado = await pedidoRepository.actualizarEstado(id, nuevoEstado, usuarioId);
     io.emit('estado_actualizado', pedidoActualizado);
     return pedidoActualizado;
 };
 
-export const listarPedidosDelivery = async () => {
-    return await pedidoRepository.obtenerPedidosDelivery();
+export const listarPedidosDelivery = async (usuarioId, usuarioRol) => {
+    if (usuarioRol !== 'Motorizado') {
+        const error = new Error('Solo un motorizado puede consultar sus pedidos asignados');
+        error.status = 403;
+        throw error;
+    }
+
+    return await pedidoRepository.obtenerPedidosDelivery(usuarioId);
 };
 
 export const obtenerVentasParaCaja = async (fecha) => {
@@ -140,4 +93,65 @@ export const obtenerVentasParaCaja = async (fecha) => {
 
 export const obtenerEstadoPedido = async (id) => {
     return await pedidoRepository.obtenerEstadoPorId(id);
+};
+
+export const listarMotorizados = async (usuarioRol) => {
+    if (usuarioRol !== 'Administradora') {
+        const error = new Error('Solo la administradora puede consultar los motorizados');
+        error.status = 403;
+        throw error;
+    }
+
+    return await pedidoRepository.listarMotorizados();
+};
+
+export const asignarMotorizado = async ({
+    pedidoId,
+    motorizadoId,
+    usuario,
+    io
+}) => {
+    if (usuario.rol !== 'Administradora') {
+        const error = new Error('Solo la administradora puede asignar motorizados');
+        error.status = 403;
+        throw error;
+    }
+
+    const idPedido = Number(pedidoId);
+    const idMotorizado = Number(motorizadoId);
+
+    if (
+        !Number.isInteger(idPedido) ||
+        idPedido <= 0 ||
+        !Number.isInteger(idMotorizado) ||
+        idMotorizado <= 0
+    ) {
+        const error = new Error('Los identificadores del pedido y motorizado no son válidos');
+        error.status = 400;
+        throw error;
+    }
+
+    const pedidoActual = await pedidoRepository.obtenerPedidoPorId(idPedido);
+
+    if (!pedidoActual) {
+        const error = new Error('Pedido no encontrado');
+        error.status = 404;
+        throw error;
+    }
+
+    validarCambioEstado({
+        estadoActual: pedidoActual.estado,
+        nuevoEstado: ESTADOS_PEDIDO.ASIGNADO,
+        tipoEntrega: pedidoActual.tipo_entrega
+    });
+
+    const pedidoActualizado =
+        await pedidoRepository.asignarMotorizadoAPedido({
+            pedidoId: idPedido,
+            motorizadoId: idMotorizado,
+            usuarioAdminId: usuario.id
+        });
+
+    io.emit('estado_actualizado', pedidoActualizado);
+    return pedidoActualizado;
 };

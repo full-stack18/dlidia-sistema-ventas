@@ -28,7 +28,7 @@ export const actualizarEstado = async (req, res) => {
     try {
         const { id } = req.params;
         const { estado } = req.body;
-        const pedido = await pedidoService.cambiarEstadoPedido(id, estado, req.io, req.usuario.rol);
+        const pedido = await pedidoService.cambiarEstadoPedido(id, estado, req.io, req.usuario.rol, req.usuario.id);
         res.status(200).json(pedido);
     } catch (error) {
         console.error(error);
@@ -38,10 +38,15 @@ export const actualizarEstado = async (req, res) => {
 
 export const obtenerDelivery = async (req, res) => {
     try {
-        const pedidos = await pedidoService.listarPedidosDelivery();
+        const pedidos = await pedidoService.listarPedidosDelivery(
+            req.usuario.id,
+            req.usuario.rol
+        );
         res.status(200).json(pedidos);
     } catch (error) {
-        res.status(500).json({ error: 'Error al cargar pedidos de delivery' });
+        res.status(error.status || 500).json({
+            error: error.message || 'Error al cargar pedidos de delivery'
+        });
     }
 };
 
@@ -65,5 +70,36 @@ export const consultarEstadoPublico = async (req, res) => {
         res.status(200).json(pedido);
     } catch (error) {
         res.status(500).json({ error: 'Error al consultar el estado del pedido' });
+    }
+};
+
+export const obtenerMotorizados = async (req, res) => {
+    try {
+        const motorizados = await pedidoService.listarMotorizados(
+            req.usuario.rol
+        );
+
+        res.status(200).json(motorizados);
+    } catch (error) {
+        res.status(error.status || 500).json({
+            error: error.message || 'Error al obtener los motorizados'
+        });
+    }
+};
+
+export const asignarMotorizado = async (req, res) => {
+    try {
+        const pedido = await pedidoService.asignarMotorizado({
+            pedidoId: req.params.id,
+            motorizadoId: req.body.motorizadoId,
+            usuario: req.usuario,
+            io: req.io
+        });
+
+        res.status(200).json(pedido);
+    } catch (error) {
+        res.status(error.status || 500).json({
+            error: error.message || 'Error al asignar el motorizado'
+        });
     }
 };

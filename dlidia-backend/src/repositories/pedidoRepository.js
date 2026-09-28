@@ -156,24 +156,63 @@ export const obtenerTodosLosPedidos = async () => {
     return result.rows;
 };
 
-export const actualizarEstado = async (id, nuevoEstado) => {
-    const result = await pool.query(
-        'UPDATE pedidos SET estado = $1 WHERE id = $2 RETURNING id;',
-        [nuevoEstado, id]
-    );
-    if (!result.rows[0]) return undefined;
-    return await obtenerPedidoCompletoConCliente(pool, result.rows[0].id);
+export const actualizarEstado = async (id, nuevoEstado, usuarioId) => {
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        const pedidoActual = await client.query(
+            'SELECT estado FROM pedidos WHERE id = $1 FOR UPDATE;',
+            [id]
+        );
+
+        if (!pedidoActual.rows[0]) {
+            await client.query('ROLLBACK');
+            return undefined;
+        }
+
+        const estadoAnterior = pedidoActual.rows[0].estado;
+
+        await client.query(
+            'UPDATE pedidos SET estado = $1 WHERE id = $2;',
+            [nuevoEstado, id]
+        );
+
+        await client.query(
+            `INSERT INTO historial_estados_pedido (
+                pedido_id,
+                estado_anterior,
+                estado_nuevo,
+                usuario_id
+            )
+            VALUES ($1, $2, $3, $4);`,
+            [id, estadoAnterior, nuevoEstado, usuarioId ?? null]
+        );
+
+        const pedido = await obtenerPedidoCompletoConCliente(client, id);
+
+        await client.query('COMMIT');
+        return pedido;
+    } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+    } finally {
+        client.release();
+    }
 };
 
-export const obtenerPedidosDelivery = async () => {
-    // Igual aquí para la vista del motorizado
+export const obtenerPedidosDelivery = async (motorizadoId) => {
     const query = `
         ${consultaPedidosConDetalles}
-        WHERE p.tipo_entrega = 'Delivery' AND p.estado != 'Entregado'
+        WHERE p.tipo_entrega = 'Delivery'
+          AND p.motorizado_id = $1
+          AND p.estado NOT IN ('Entregado', 'Cancelado')
         GROUP BY p.id
         ORDER BY p.fecha_creacion ASC;
     `;
-    const result = await pool.query(query);
+
+    const result = await pool.query(query, [motorizadoId]);
     return result.rows;
 };
 
@@ -221,4 +260,98 @@ export const obtenerEstadoPorId = async (id) => {
     `;
     const result = await pool.query(query, [id]);
     return result.rows[0];
+};
+
+export const listarMotorizados = async () => {
+    const result = await pool.query(`
+        SELECT id, username
+        FROM usuarios
+        WHERE rol = 'Motorizado'
+        ORDER BY username;
+    `);
+
+    return result.rows;
+};
+
+export const asignarMotorizadoAPedido = async ({
+    pedidoId,
+    motorizadoId,
+    usuarioAdminId
+}) => {
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        const motorizado = await client.query(`
+            SELECT id
+            FROM usuarios
+            WHERE id = $1 AND rol = 'Motorizado';
+        `, [motorizadoId]);
+
+        if (!motorizado.rows[0]) {
+            const error = new Error('El usuario seleccionado no es un motorizado válido');
+            error.status = 400;
+            throw error;
+        }
+
+        const pedidoResult = await client.query(`
+            SELECT id, estado, tipo_entrega
+            FROM pedidos
+            WHERE id = $1
+            FOR UPDATE;
+        `, [pedidoId]);
+
+        const pedidoActual = pedidoResult.rows[0];
+
+        if (!pedidoActual) {
+            const error = new Error('Pedido no encontrado');
+            error.status = 404;
+            throw error;
+        }
+
+        if (
+            pedidoActual.tipo_entrega !== 'Delivery' ||
+            pedidoActual.estado !== 'Listo'
+        ) {
+            const error = new Error(
+                'Solo se puede asignar un motorizado a un pedido Delivery que esté Listo'
+            );
+            error.status = 409;
+            throw error;
+        }
+
+        await client.query(`
+            UPDATE pedidos
+            SET motorizado_id = $1,
+                estado = 'Asignado'
+            WHERE id = $2;
+        `, [motorizadoId, pedidoId]);
+
+        await client.query(`
+            INSERT INTO historial_estados_pedido (
+                pedido_id,
+                estado_anterior,
+                estado_nuevo,
+                usuario_id
+            )
+            VALUES ($1, $2, $3, $4);
+        `, [
+            pedidoId,
+            pedidoActual.estado,
+            'Asignado',
+            usuarioAdminId
+        ]);
+
+        const pedidoActualizado =
+            await obtenerPedidoCompletoConCliente(client, pedidoId);
+
+        await client.query('COMMIT');
+        return pedidoActualizado;
+    } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+    } finally {
+        client.release();
+    }
 };

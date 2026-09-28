@@ -21,7 +21,22 @@ interface DetallePedido {
   subtotal: number;
 }
 
-const PASOS = ['Pendiente', 'En Preparación', 'Entregado'];
+const PASOS_DELIVERY = [
+  "Pendiente",
+  "En Preparación",
+  "Listo",
+  "Asignado",
+  "Recogido",
+  "En camino",
+  "Entregado",
+];
+
+const PASOS_SIN_DELIVERY = [
+  "Pendiente",
+  "En Preparación",
+  "Listo",
+  "Entregado",
+];
 
 export default function SeguimientoPedido() {
   const params = useParams();
@@ -79,20 +94,28 @@ export default function SeguimientoPedido() {
     );
   }
 
-  const pasoActual = PASOS.indexOf(pedido.estado);
-  const esperandoMotorizado = pedido.tipo_entrega === 'Delivery' && pedido.estado === 'En Preparación';
+const pasosPedido =
+  pedido.tipo_entrega === "Delivery"
+    ? PASOS_DELIVERY
+    : PASOS_SIN_DELIVERY;
+
+const pasoActual = pasosPedido.indexOf(pedido.estado);
+
+const esperandoMotorizado =
+  pedido.tipo_entrega === "Delivery" &&
+  pedido.estado === "Listo";
 
   return (
-    <div className="min-h-screen bg-[#f8f5f2] flex items-center justify-center px-4 py-12">
-      <div className="bg-white rounded-2xl shadow-xl border-t-8 border-[#7A1010] max-w-lg w-full p-8">
+    <div className="flex min-h-screen items-center justify-center bg-[#f8f5f2] px-4 py-8 sm:py-12">
+      <div className="w-full max-w-2xl rounded-2xl border-t-8 border-[#7A1010] bg-white p-6 shadow-xl sm:p-8">
         <div className="text-center mb-8">
           <p className="text-gray-400 font-bold text-sm uppercase tracking-wide">Pedido</p>
           <h1 className="text-4xl font-extrabold text-[#1a1210]">#{pedido.id}</h1>
         </div>
 
         <div className="flex items-center justify-between mb-8">
-          {PASOS.map((paso, i) => (
-            <div key={paso} className="flex-1 flex flex-col items-center relative">
+          {pasosPedido.map((paso, i) => (
+            <div key={paso} className="relative flex min-w-0 flex-1 flex-col items-center">
               {i > 0 && (
                 <div
                   className={`absolute top-4 right-1/2 w-full h-1 -z-10 ${i <= pasoActual ? 'bg-[#DCA11D]' : 'bg-gray-200'}`}
@@ -104,7 +127,9 @@ export default function SeguimientoPedido() {
               >
                 {i < pasoActual ? '✓' : i + 1}
               </div>
-              <p className={`text-xs font-bold mt-2 text-center ${i <= pasoActual ? 'text-[#1a1210]' : 'text-gray-400'}`}>
+              <p className={`mx-auto mt-2 min-h-10 w-full max-w-18 px-1 whitespace-normal break-normal text-center text-[10px] font-bold leading-tight ${
+                              i <= pasoActual ? "text-[#1a1210]" : "text-gray-400"
+                            }`}>
                 {paso}
               </p>
             </div>

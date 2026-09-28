@@ -12,6 +12,12 @@ interface Pedido {
   total: number;
   estado: string;
   detalles: DetallePedido[];
+  motorizado_id?: number | null;
+}
+
+interface Motorizado {
+  id: number;
+  username: string;
 }
 
 interface DetallePedido {
@@ -29,6 +35,10 @@ interface DetallePedido {
 export default function PanelAdministrativo() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [autorizado, setAutorizado] = useState(true);
+  const [motorizados, setMotorizados] = useState<Motorizado[]>([]);
+  const [esAdministradora, setEsAdministradora] = useState(false);
+  const [motorizadoSeleccionado, setMotorizadoSeleccionado] =
+    useState<Record<number, string>>({});
 
   useEffect(() => {
     const token = localStorage.getItem('dlidia_token');
@@ -37,16 +47,23 @@ export default function PanelAdministrativo() {
       return;
     }
 
+    let esAdmin = false;
+
     try {
       const decoded: any = (jwtDecodeModule as any).jwtDecode(token);
+
       if (decoded.rol === 'Motorizado') {
         setAutorizado(false);
         return;
       }
+
+      esAdmin = decoded.rol === 'Administradora';
+      setEsAdministradora(esAdmin);
     } catch (error) {
       setAutorizado(false);
       return;
     }
+    
 
     const cargarHistorial = async () => {
       try {
@@ -69,6 +86,30 @@ export default function PanelAdministrativo() {
       }
     };
     cargarHistorial();
+
+    if (esAdmin) {
+      const cargarMotorizados = async () => {
+        try {
+          const res = await fetch(`${API_URL}/api/pedidos/motorizados`, {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          });
+
+          const data = await res.json();
+
+          if (res.ok && Array.isArray(data)) {
+            setMotorizados(data);
+          } else {
+            console.error('No se pudieron cargar los motorizados:', data);
+          }
+        } catch (error) {
+          console.error('Error al cargar motorizados:', error);
+        }
+      };
+
+      cargarMotorizados();
+    }
 
     socket.connect();
     socket.on('nuevo_pedido', (pedidoNuevo) => {
@@ -109,6 +150,55 @@ export default function PanelAdministrativo() {
     }
   };
 
+  const asignarMotorizado = async (pedidoId: number) => {
+    const motorizadoId = motorizadoSeleccionado[pedidoId];
+
+    if (!motorizadoId) {
+      alert('Selecciona un motorizado antes de asignar el pedido.');
+      return;
+    }
+
+    const token = localStorage.getItem('dlidia_token');
+
+    if (!token) {
+      alert('Tu sesión expiró. Vuelve a iniciar sesión.');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/api/pedidos/${pedidoId}/asignar`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          motorizadoId: Number(motorizadoId)
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error || 'No se pudo asignar el motorizado.');
+        return;
+      }
+
+      setPedidos((actuales) =>
+        actuales.map((pedido) =>
+          pedido.id === pedidoId ? data : pedido
+        )
+      );
+
+      setMotorizadoSeleccionado((actual) => ({
+        ...actual,
+        [pedidoId]: ''
+      }));
+    } catch (error) {
+      alert('Error de conexión al asignar el motorizado.');
+    }
+  };
+
   if (!autorizado) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -142,13 +232,22 @@ export default function PanelAdministrativo() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {pedidos.map((pedido) => (
-          <div key={pedido.id} className={`p-4 rounded shadow-md border-l-4 bg-white
-            ${pedido.estado === 'Pendiente' ? 'border-red-500' :
-              pedido.estado === 'En Preparación' ? 'border-yellow-500' : 'border-green-500 opacity-60'}`}>
+          <div
+            key={pedido.id}
+            className={`p-4 rounded shadow-md border-l-4 bg-white text-gray-800
+              ${pedido.estado === 'Pendiente' ? 'border-red-500' :
+                pedido.estado === 'En Preparación' ? 'border-yellow-500' :
+                pedido.estado === 'Listo' ? 'border-blue-500' :
+                pedido.estado === 'Asignado' ? 'border-purple-500' :
+                pedido.estado === 'Recogido' ? 'border-indigo-500' :
+                pedido.estado === 'En camino' ? 'border-cyan-500' :
+                pedido.estado === 'Cancelado' ? 'border-red-700' :
+                'border-green-600'}`}
+          >
 
             <div className="flex justify-between border-b pb-2 mb-2">
-              <h2 className="text-xl font-bold">Pedido #{pedido.id}</h2>
-              <span className="font-bold text-gray-500">{pedido.estado}</span>
+              <h2 className="text-xl font-bold text-gray-900">Pedido #{pedido.id}</h2>
+              <span className="font-bold text-gray-700">{pedido.estado}</span>
             </div>
 
             <p className="text-gray-600">Origen: {pedido.origen}</p>
@@ -186,18 +285,61 @@ export default function PanelAdministrativo() {
 
             <div className="mt-4 flex gap-2">
               {pedido.estado === 'Pendiente' && (
-                <button onClick={() => cambiarEstado(pedido.id, 'En Preparación')} className="w-full bg-yellow-500 text-white py-2 rounded hover:bg-yellow-600 font-bold">
+                <button
+                  onClick={() => cambiarEstado(pedido.id, 'En Preparación')}
+                  className="w-full bg-yellow-500 text-white py-2 rounded hover:bg-yellow-600 font-bold"
+                >
                   Preparar
                 </button>
               )}
-              {pedido.estado === 'En Preparación' && pedido.tipo_entrega !== 'Delivery' && (
-                <button onClick={() => cambiarEstado(pedido.id, 'Entregado')} className="w-full bg-green-500 text-white py-2 rounded hover:bg-green-600 font-bold">
-                  Cobrar / Entregar
+
+              {pedido.estado === 'En Preparación' && (
+                <button
+                  onClick={() => cambiarEstado(pedido.id, 'Listo')}
+                  className="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 font-bold"
+                >
+                  Marcar como listo
                 </button>
               )}
-              {pedido.estado === 'En Preparación' && pedido.tipo_entrega === 'Delivery' && (
+
+              {pedido.estado === 'Listo' &&
+              pedido.tipo_entrega === 'Delivery' &&
+              esAdministradora && (
+                <div className="w-full flex flex-col sm:flex-row gap-2">
+                  <select
+                    value={motorizadoSeleccionado[pedido.id] ?? ''}
+                    onChange={(event) =>
+                      setMotorizadoSeleccionado((actual) => ({
+                        ...actual,
+                        [pedido.id]: event.target.value
+                      }))
+                    }
+                    className="flex-1 border border-gray-300 rounded px-3 py-2 bg-white text-gray-800"
+                  >
+                    <option value="">Selecciona un motorizado</option>
+
+                    {motorizados.map((motorizado) => (
+                      <option key={motorizado.id} value={motorizado.id}>
+                        {motorizado.username}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    onClick={() => asignarMotorizado(pedido.id)}
+                    disabled={!motorizadoSeleccionado[pedido.id]}
+                    className="bg-blue-600 text-white px-4 py-2 rounded font-bold disabled:opacity-50"
+                  >
+                    Asignar
+                  </button>
+                </div>
+              )}
+
+            {pedido.estado === 'Listo' &&
+              pedido.tipo_entrega === 'Delivery' &&
+              !esAdministradora && (
                 <p className="w-full text-center text-blue-600 font-bold py-2 bg-blue-50 rounded">
-                  🛵 Esperando recojo del motorizado
+                  🛵 Pedido listo; esperando asignación de motorizado
                 </p>
               )}
             </div>

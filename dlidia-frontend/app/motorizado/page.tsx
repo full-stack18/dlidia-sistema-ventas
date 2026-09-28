@@ -8,6 +8,9 @@ interface Pedido {
   origen: string;
   total: number;
   estado: string;
+  nombre_cliente?: string;
+  telefono_cliente?: string;
+  direccion_entrega?: string;
 }
 
 export default function MotorizadoApp() {
@@ -62,7 +65,7 @@ export default function MotorizadoApp() {
     };
   }, []);
 
-  const marcarEntregado = async (id: number) => {
+  const marcarEntregado = async (id: number, nuevoEstado: string) => {
     const token = localStorage.getItem('dlidia_token');
     const res = await fetch(`${API_URL}/api/pedidos/${id}`, {
       method: 'PUT',
@@ -70,11 +73,19 @@ export default function MotorizadoApp() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({ estado: 'Entregado' })
+      body: JSON.stringify({ estado: nuevoEstado })
     });
 
     if (res.ok) {
-      setPedidos(prev => prev.filter(p => p.id !== id));
+      if (nuevoEstado === 'Entregado') {
+        setPedidos(prev => prev.filter(p => p.id !== id));
+      } else {
+        setPedidos(prev =>
+          prev.map(p =>
+            p.id === id ? { ...p, estado: nuevoEstado } : p
+          )
+        );
+      }
     } else {
       const data = await res.json();
       alert(data.error || 'No se pudo confirmar la entrega.');
@@ -114,20 +125,58 @@ export default function MotorizadoApp() {
         ) : (
           pedidos.map((pedido) => (
             <div key={pedido.id} className="bg-white rounded-xl shadow p-4 border-l-4 border-blue-500">
-              <div className="flex justify-between items-start mb-2">
-                <h2 className="text-lg font-bold">Pedido #{pedido.id}</h2>
-                <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded font-bold">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-lg font-bold text-gray-900">
+                  Pedido #{pedido.id}
+                </h2>
+
+                <span className="rounded bg-blue-100 px-2 py-1 text-xs font-bold text-blue-800">
                   {pedido.estado}
                 </span>
               </div>
+
+              <div className="mb-4 grid grid-cols-1 gap-1 rounded-lg bg-gray-50 p-3 text-sm text-gray-700 sm:grid-cols-2">
+                <p>
+                  <strong>Cliente:</strong>{" "}
+                  {pedido.nombre_cliente || "No registrado"}
+                </p>
+                <p>
+                  <strong>Teléfono:</strong>{" "}
+                  {pedido.telefono_cliente || "No registrado"}
+                </p>
+                <p className="sm:col-span-2">
+                  <strong>Dirección:</strong>{" "}
+                  {pedido.direccion_entrega || "No registrada"}
+                </p>
+              </div>
               <p className="text-gray-600 text-sm mb-1">Cobrar: <strong className="text-green-600 text-base">S/ {Number(pedido.total).toFixed(2)}</strong></p>
 
-              <button
-                onClick={() => marcarEntregado(pedido.id)}
-                className="mt-4 w-full bg-green-500 text-white py-3 rounded-lg font-bold text-lg active:bg-green-600 shadow"
-              >
-                Confirmar Entrega
-              </button>
+              {pedido.estado === 'Asignado' && (
+                <button
+                  onClick={() => marcarEntregado(pedido.id, 'Recogido')}
+                  className="mt-4 w-full bg-blue-600 text-white py-3 rounded-lg font-bold text-lg hover:bg-blue-700"
+                >
+                  Confirmar recojo
+                </button>
+              )}
+
+              {pedido.estado === 'Recogido' && (
+                <button
+                  onClick={() => marcarEntregado(pedido.id, 'En camino')}
+                  className="mt-4 w-full bg-orange-500 text-white py-3 rounded-lg font-bold text-lg hover:bg-orange-600"
+                >
+                  Iniciar entrega
+                </button>
+              )}
+
+              {pedido.estado === 'En camino' && (
+                <button
+                  onClick={() => marcarEntregado(pedido.id, 'Entregado')}
+                  className="mt-4 w-full bg-green-600 text-white py-3 rounded-lg font-bold text-lg hover:bg-green-700"
+                >
+                  Confirmar entrega
+                </button>
+              )}
             </div>
           ))
         )}

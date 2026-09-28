@@ -5,7 +5,9 @@ import {
     actualizarEstado,
     obtenerDelivery,
     cuadreDeCaja,
-    consultarEstadoPublico
+    consultarEstadoPublico,
+    obtenerMotorizados,
+    asignarMotorizado
 } from '../controllers/pedidoController.js';
 import { verificarToken } from '../middleware/authMiddleware.js';
 
@@ -19,6 +21,9 @@ router.get('/estado/:id', consultarEstadoPublico); // solo devuelve el estado, s
 router.get('/', verificarToken, obtenerPedidos);
 router.get('/caja', verificarToken, cuadreDeCaja);
 router.get('/delivery', verificarToken, obtenerDelivery);
+router.get('/motorizados', verificarToken, obtenerMotorizados);
+router.put('/:id/asignar', verificarToken, asignarMotorizado);
 router.put('/:id', verificarToken, actualizarEstado);
+
 
 export default router;
