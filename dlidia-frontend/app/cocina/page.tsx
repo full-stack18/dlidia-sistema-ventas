@@ -24,6 +24,8 @@ interface DetallePedido {
   observaciones?: string | null;
 }
 
+
+
 export default function PanelAdministrativo() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [autorizado, setAutorizado] = useState(true);
@@ -156,10 +158,22 @@ export default function PanelAdministrativo() {
                 <p className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Productos</p>
                 <ul className="space-y-2">
                   {pedido.detalles.map((detalle) => (
-                    <li key={detalle.id} className="flex justify-between gap-3 text-sm">
-                      <span className="font-semibold text-gray-800">
-                        {detalle.cantidad}x {detalle.nombre}
-                      </span>
+                    <li
+                      key={detalle.id}
+                      className="flex justify-between gap-3 text-sm"
+                      >
+                      <div>
+                        <p className="font-semibold text-gray-800">
+                          {detalle.cantidad}x {detalle.nombre}
+                        </p>
+
+                        {detalle.observaciones && (
+                          <p className="mt-1 text-xs text-gray-600">
+                            Observación: {detalle.observaciones}
+                          </p>
+                        )}
+                      </div>
+
                       <span className="font-bold text-gray-600">
                         S/ {Number(detalle.subtotal).toFixed(2)}
                       </span>

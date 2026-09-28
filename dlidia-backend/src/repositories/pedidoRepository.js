@@ -1,4 +1,5 @@
 import pool from '../config/db.js';
+import { calcularTotalCentimos } from '../utils/pedidoRules.js';
 
 const consultaPedidosConDetalles = `
     SELECT
@@ -11,7 +12,7 @@ const consultaPedidosConDetalles = `
                     'nombre', d.nombre_plato,
                     'cantidad', d.cantidad,
                     'precio_unitario', d.precio_unitario,
-                    'subtotal', d.cantidad * d.precio_unitario,
+                    'subtotal', d.subtotal,
                     'observaciones', d.observaciones
                 ) ORDER BY d.id
             ) FILTER (WHERE d.id IS NOT NULL),
@@ -55,8 +56,21 @@ export const guardarPedidoConDetalles = async ({
         const platosPorId = new Map(platosResult.rows.map((plato) => [plato.id, plato]));
         const detalles = items.map((item) => {
             const plato = platosPorId.get(item.platoId);
-            if (!plato || !plato.disponible) {
-                const error = new Error(`El plato ${item.platoId} no existe o no está disponible`);
+
+            if (!plato || plato.disponible !== true) {
+                const error = new Error(
+                    `El plato ${item.platoId} no existe o no está disponible`
+                );
+                error.status = 400;
+                throw error;
+            }
+
+            const precioUnitario = Number(plato.precio);
+
+            if (!Number.isFinite(precioUnitario) || precioUnitario < 0) {
+                const error = new Error(
+                    `El precio del plato ${item.platoId} no es válido`
+                );
                 error.status = 400;
                 throw error;
             }
@@ -64,14 +78,11 @@ export const guardarPedidoConDetalles = async ({
             return {
                 ...item,
                 nombre: plato.nombre,
-                precioUnitario: Number(plato.precio)
+                precioUnitario
             };
         });
 
-        const totalCentimos = detalles.reduce(
-            (total, detalle) => total + Math.round(detalle.precioUnitario * 100) * detalle.cantidad,
-            0
-        );
+        const totalCentimos = calcularTotalCentimos(detalles);
         const total = (totalCentimos / 100).toFixed(2);
 
         const pedidoResult = await client.query(`
@@ -198,7 +209,7 @@ export const obtenerEstadoPorId = async (id) => {
                         'nombre', d.nombre_plato,
                         'cantidad', d.cantidad,
                         'precio_unitario', d.precio_unitario,
-                        'subtotal', d.cantidad * d.precio_unitario
+                        'subtotal', d.subtotal
                     ) ORDER BY d.id
                 ) FILTER (WHERE d.id IS NOT NULL),
                 '[]'::json

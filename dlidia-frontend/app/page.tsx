@@ -14,6 +14,7 @@ interface Plato {
 
 interface ItemCarrito extends Plato {
   cantidad: number;
+  observaciones: string;
 }
 
 export default function PortalCliente() {
@@ -47,7 +48,7 @@ export default function PortalCliente() {
       if (existe) {
         return prev.map((item) => item.id === plato.id ? { ...item, cantidad: item.cantidad + 1 } : item);
       }
-      return [...prev, { ...plato, cantidad: 1 }];
+      return [...prev, { ...plato, cantidad: 1, observaciones: '' }];
     });
   };
 
@@ -76,7 +77,8 @@ export default function PortalCliente() {
           direccionEntrega: tipoEntrega === 'Delivery' ? direccionEntrega : null,
           items: carrito.map((item) => ({
             platoId: item.id,
-            cantidad: item.cantidad
+            cantidad: item.cantidad,
+            observaciones: item.observaciones.trim()
           }))
         })
       });
@@ -204,13 +206,46 @@ export default function PortalCliente() {
               ) : (
                 <ul className="space-y-3">
                   {carrito.map((item) => (
-                    <li key={item.id} className="flex justify-between items-center bg-[#f8f5f2] p-3 rounded-lg border border-gray-200">
+                    <li
+                      key={item.id}
+                      className="flex items-center justify-between gap-3 bg-[#f8f5f2] p-3 rounded-lg border border-gray-200"
+                    >
                       <div className="flex-1">
-                        <p className="font-bold text-[#1a1210] text-sm">{item.cantidad}x {item.nombre}</p>
-                        <p className="text-xs text-[#7A1010] font-extrabold mt-1">S/ {(Number(item.precio) * item.cantidad).toFixed(2)}</p>
+                        <p className="font-bold text-[#1a1210] text-sm">
+                          {item.cantidad}x {item.nombre}
+                        </p>
+
+                        <p className="text-xs text-[#7A1010] font-extrabold mt-1">
+                          S/ {(Number(item.precio) * item.cantidad).toFixed(2)}
+                        </p>
+
+                        <textarea
+                          value={item.observaciones}
+                          onChange={(e) => {
+                            const observaciones = e.target.value;
+
+                            setCarrito((prev) =>
+                              prev.map((producto) =>
+                                producto.id === item.id
+                                  ? { ...producto, observaciones }
+                                  : producto
+                              )
+                            );
+                          }}
+                          maxLength={500}
+                          placeholder="Observaciones para la preparación"
+                          className="mt-2 w-full rounded border border-gray-300 p-2 text-xs text-gray-800"
+                        />
                       </div>
-                      <button onClick={() => quitarDelCarrito(item.id)} className="text-gray-400 hover:text-red-600 font-bold text-2xl px-2">&times;</button>
-                    </li>
+
+                      <button
+                        onClick={() => quitarDelCarrito(item.id)}
+                        className="text-gray-400 hover:text-red-600 font-bold text-2xl px-2"
+                        aria-label={`Quitar ${item.nombre} del carrito`}
+                      >
+                        &times;
+                      </button>
+                    </li>   
                   ))}
                 </ul>
               )}

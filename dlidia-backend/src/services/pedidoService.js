@@ -1,4 +1,5 @@
 import * as pedidoRepository from '../repositories/pedidoRepository.js';
+import { normalizarItemsPedido } from '../utils/pedidoRules.js';
 
 export const procesarNuevoPedido = async (datosPedido, io) => {
     const { tipoEntrega, nombreCliente, telefonoCliente, direccionEntrega } = datosPedido;
@@ -29,15 +30,21 @@ export const procesarNuevoPedido = async (datosPedido, io) => {
         }
     }
 
-    if (!Array.isArray(datosPedido.items) || datosPedido.items.length === 0) {
-        const error = new Error('El pedido debe contener al menos un plato');
-        error.status = 400;
-        throw error;
-    }
+    const itemsNormalizados = normalizarItemsPedido(datosPedido.items);
+
     if (datosPedido.items.length > 50) {
-        const error = new Error('El pedido no puede contener más de 50 productos diferentes');
-        error.status = 400;
-        throw error;
+        const observaciones = item.observaciones ?? null;
+
+        if (
+            observaciones !== null &&
+            (typeof observaciones !== 'string' || observaciones.length > 500)
+        ) {
+            const error = new Error(
+                'Las observaciones deben ser texto de hasta 500 caracteres'
+            );
+            error.status = 400;
+            throw error;
+        }
     }
 
     const itemsAgrupados = new Map();
@@ -55,6 +62,19 @@ export const procesarNuevoPedido = async (datosPedido, io) => {
             throw error;
         }
 
+        const observaciones = item.observaciones ?? null;
+
+        if (
+            observaciones !== null &&
+            (typeof observaciones !== 'string' || observaciones.length > 500)
+        ) {
+            const error = new Error(
+                'Las observaciones deben ser texto de hasta 500 caracteres'
+            );
+            error.status = 400;
+            throw error;
+        }
+
         const existente = itemsAgrupados.get(platoId);
         const cantidadTotal = (existente?.cantidad || 0) + cantidad;
         if (cantidadTotal > 99) {
@@ -66,9 +86,7 @@ export const procesarNuevoPedido = async (datosPedido, io) => {
         itemsAgrupados.set(platoId, {
             platoId,
             cantidad: cantidadTotal,
-            observaciones: typeof item.observaciones === 'string'
-                ? item.observaciones.trim().slice(0, 500)
-                : null
+            observaciones: observaciones?.trim() || null
         });
     }
 
@@ -79,7 +97,7 @@ export const procesarNuevoPedido = async (datosPedido, io) => {
         nombreCliente: nombreCliente.trim(),
         telefonoCliente: telefonoCliente?.trim() || null,
         direccionEntrega: tipoEntrega === 'Delivery' ? direccionEntrega.trim() : null,
-        items: Array.from(itemsAgrupados.values())
+        items: itemsNormalizados
     });
 
     io.emit('nuevo_pedido', nuevoPedido);
