@@ -218,13 +218,61 @@ export const obtenerPedidosDelivery = async (motorizadoId) => {
 
 export const obtenerVentasDelDia = async (fecha) => {
     const query = `
-        ${consultaPedidosConDetalles}
-        WHERE p.estado = 'Entregado'
-          AND TO_CHAR(p.fecha_creacion, 'YYYY-MM-DD') = $1
-        GROUP BY p.id
-        ORDER BY p.fecha_creacion DESC;
+        SELECT
+            p.id,
+            p.origen,
+            p.tipo_entrega,
+            pa.importe AS total,
+            pa.fecha_confirmacion AS fecha_creacion,
+            pa.metodo_pago,
+            COALESCE(
+                json_agg(
+                    json_build_object(
+                        'id', d.id,
+                        'nombre', d.nombre_plato,
+                        'cantidad', d.cantidad,
+                        'subtotal', d.subtotal
+                    ) ORDER BY d.id
+                ) FILTER (WHERE d.id IS NOT NULL),
+                '[]'::json
+            ) AS detalles
+        FROM pedidos p
+        INNER JOIN pagos pa
+            ON pa.pedido_id = p.id
+        LEFT JOIN detalle_pedidos d
+            ON d.pedido_id = p.id
+        WHERE pa.estado = 'Confirmado'
+          AND (pa.fecha_confirmacion AT TIME ZONE 'America/Lima')::date = $1::date
+        GROUP BY
+            p.id,
+            p.origen,
+            p.tipo_entrega,
+            pa.pago_id,
+            pa.importe,
+            pa.fecha_confirmacion,
+            pa.metodo_pago
+        ORDER BY pa.fecha_confirmacion DESC;
     `;
+
     const result = await pool.query(query, [fecha]);
+    return result.rows;
+};
+
+export const obtenerPedidosPendientesDePago = async () => {
+    const query = `
+        ${consultaPedidosConDetalles}
+        WHERE p.estado <> 'Cancelado'
+          AND NOT EXISTS (
+              SELECT 1
+              FROM pagos pa
+              WHERE pa.pedido_id = p.id
+                AND pa.estado = 'Confirmado'
+          )
+        GROUP BY p.id
+        ORDER BY p.fecha_creacion ASC;
+    `;
+
+    const result = await pool.query(query);
     return result.rows;
 };
 

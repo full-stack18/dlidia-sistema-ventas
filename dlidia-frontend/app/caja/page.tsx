@@ -9,8 +9,9 @@ interface Venta {
   origen: string;
   tipo_entrega: string;
   total: number;
+  metodo_pago: string;
   fecha_creacion: string;
-  detalles: DetalleVenta[];
+  detalles: DetalleVenta[]; 
 }
 
 interface DetalleVenta {
@@ -31,6 +32,8 @@ const obtenerFechaLocal = () => {
 
 export default function CuadreCaja() {
   const [ventas, setVentas] = useState<Venta[]>([]);
+  const [pedidosPendientes, setPedidosPendientes] = useState<Venta[]>([]);
+  const [cargandoPendientes, setCargandoPendientes] = useState(false);  
   const [total, setTotal] = useState(0);
   const [fecha, setFecha] = useState(obtenerFechaLocal());
   const [autorizado, setAutorizado] = useState(true);
@@ -133,6 +136,7 @@ export default function CuadreCaja() {
                     <th className="p-4 font-bold">Hora</th>
                     <th className="p-4 font-bold">Tipo Entrega</th>
                     <th className="p-4 font-bold">Origen</th>
+                    <th className="p-4 font-bold">Método de pago</th>
                     <th className="p-4 font-bold">Productos</th>
                     <th className="p-4 font-bold text-right">Total (S/)</th>
                   </tr>
@@ -150,6 +154,7 @@ export default function CuadreCaja() {
                         </span>
                       </td>
                       <td className="p-4 text-gray-600">{venta.origen}</td>
+                      <td className="p-4 text-gray-600">{venta.metodo_pago}</td>
                       <td className="p-4 text-gray-600 min-w-52">
                         {venta.detalles?.length > 0 ? (
                           <ul className="space-y-1">

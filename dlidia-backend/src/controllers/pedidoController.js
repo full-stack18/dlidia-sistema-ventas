@@ -62,6 +62,20 @@ export const cuadreDeCaja = async (req, res) => {
     }
 };
 
+export const obtenerPedidosPendientesDePago = async (req, res) => {
+    try {
+        const pedidos = await pedidoService.listarPedidosPendientesDePago(
+            req.usuario.rol
+        );
+
+        res.status(200).json(pedidos);
+    } catch (error) {
+        res.status(error.status || 500).json({
+            error: error.message || 'Error al cargar pedidos pendientes de pago'
+        });
+    }
+};
+
 export const consultarEstadoPublico = async (req, res) => {
     try {
         const { id } = req.params;

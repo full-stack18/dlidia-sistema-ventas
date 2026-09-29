@@ -341,7 +341,17 @@ export default function PanelAdministrativo() {
                 <p className="w-full text-center text-blue-600 font-bold py-2 bg-blue-50 rounded">
                   🛵 Pedido listo; esperando asignación de motorizado
                 </p>
-              )}
+            )}
+
+            {pedido.estado === 'Listo' &&
+            pedido.tipo_entrega !== 'Delivery' && (
+              <button
+                onClick={() => cambiarEstado(pedido.id, 'Entregado')}
+                className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 font-bold"
+              >
+                Marcar como entregado
+              </button>
+            )}
             </div>
           </div>
         ))}

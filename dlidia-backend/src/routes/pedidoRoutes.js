@@ -7,9 +7,11 @@ import {
     cuadreDeCaja,
     consultarEstadoPublico,
     obtenerMotorizados,
-    asignarMotorizado
+    asignarMotorizado,
+    obtenerPedidosPendientesDePago
 } from '../controllers/pedidoController.js';
 import { verificarToken } from '../middleware/authMiddleware.js';
+import { registrarPago } from '../controllers/pagoController.js';
 
 const router = Router();
 
@@ -20,10 +22,15 @@ router.get('/estado/:id', consultarEstadoPublico); // solo devuelve el estado, s
 // Protegidas (personal autenticado)
 router.get('/', verificarToken, obtenerPedidos);
 router.get('/caja', verificarToken, cuadreDeCaja);
+router.get(
+    '/caja/pendientes-pago',
+    verificarToken,
+    obtenerPedidosPendientesDePago
+);
 router.get('/delivery', verificarToken, obtenerDelivery);
 router.get('/motorizados', verificarToken, obtenerMotorizados);
 router.put('/:id/asignar', verificarToken, asignarMotorizado);
 router.put('/:id', verificarToken, actualizarEstado);
-
+router.post('/:id/pagos', verificarToken, registrarPago);
 
 export default router;

@@ -91,6 +91,18 @@ export const obtenerVentasParaCaja = async (fecha) => {
     return await pedidoRepository.obtenerVentasDelDia(fecha);
 };
 
+export const listarPedidosPendientesDePago = async (usuarioRol) => {
+    if (!['Cajero', 'Administradora'].includes(usuarioRol)) {
+        const error = new Error(
+            'Solo Cajero o Administradora pueden consultar pagos pendientes'
+        );
+        error.status = 403;
+        throw error;
+    }
+
+    return await pedidoRepository.obtenerPedidosPendientesDePago();
+};
+
 export const obtenerEstadoPedido = async (id) => {
     return await pedidoRepository.obtenerEstadoPorId(id);
 };
