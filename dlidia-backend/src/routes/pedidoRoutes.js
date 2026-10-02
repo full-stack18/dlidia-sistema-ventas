@@ -8,7 +8,8 @@ import {
     consultarEstadoPublico,
     obtenerMotorizados,
     asignarMotorizado,
-    obtenerPedidosPendientesDePago
+    obtenerPedidosPendientesDePago,
+    registrarCierreCaja
 } from '../controllers/pedidoController.js';
 import { verificarToken } from '../middleware/authMiddleware.js';
 import { registrarPago } from '../controllers/pagoController.js';
@@ -22,6 +23,7 @@ router.get('/estado/:id', consultarEstadoPublico); // solo devuelve el estado, s
 // Protegidas (personal autenticado)
 router.get('/', verificarToken, obtenerPedidos);
 router.get('/caja', verificarToken, cuadreDeCaja);
+router.post('/caja/cierre', verificarToken, registrarCierreCaja);
 router.get(
     '/caja/pendientes-pago',
     verificarToken,

@@ -51,6 +51,12 @@ export const obtenerDelivery = async (req, res) => {
 };
 
 export const cuadreDeCaja = async (req, res) => {
+    if (!['Cajero', 'Administradora'].includes(req.usuario?.rol)) {
+        return res.status(403).json({
+            error: 'Solo Cajero o Administradora pueden consultar la caja'
+        });
+    }
+    
     try {
         const fechaConsulta = req.query.fecha || new Date().toISOString().split('T')[0];
         const ventas = await pedidoService.obtenerVentasParaCaja(fechaConsulta);
@@ -114,6 +120,34 @@ export const asignarMotorizado = async (req, res) => {
     } catch (error) {
         res.status(error.status || 500).json({
             error: error.message || 'Error al asignar el motorizado'
+        });
+    }
+};
+
+export const registrarCierreCaja = async (req, res) => {
+    try {
+        const cierre = await pedidoService.cerrarCaja({
+            usuarioId: req.usuario.id,
+            usuarioRol: req.usuario.rol,
+            montoContado: req.body.montoContado,
+            observacion: req.body.observacion
+        });
+
+        return res.status(201).json({
+            mensaje: 'Cierre de caja registrado exitosamente',
+            cierre
+        });
+    } catch (error) {
+        console.error(error);
+
+        if (error.code === '23505') {
+            return res.status(409).json({
+                error: 'Este usuario ya registró un cierre para hoy'
+            });
+        }
+
+        return res.status(error.status || 500).json({
+            error: error.message || 'Error al registrar el cierre de caja'
         });
     }
 };

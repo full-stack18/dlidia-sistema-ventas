@@ -403,3 +403,54 @@ export const asignarMotorizadoAPedido = async ({
         client.release();
     }
 };
+
+export const registrarCierreCaja = async ({
+    usuarioId,
+    montoContado,
+    observacion
+}) => {
+    const monto = Number(montoContado);
+
+    if (!Number.isFinite(monto) || monto < 0) {
+        const error = new Error('El monto contado debe ser un número válido mayor o igual a cero');
+        error.status = 400;
+        throw error;
+    }
+
+    const query = `
+        WITH resumen AS (
+            SELECT
+                COALESCE(SUM(pa.importe), 0)::numeric(10, 2) AS monto_esperado
+            FROM pagos pa
+            WHERE pa.estado = 'Confirmado'
+              AND pa.metodo_pago = 'Efectivo'
+              AND (pa.fecha_confirmacion AT TIME ZONE 'America/Lima')::date =
+                  (NOW() AT TIME ZONE 'America/Lima')::date
+        )
+        INSERT INTO cierres_caja (
+            usuario_id,
+            fecha_cierre,
+            monto_esperado,
+            monto_contado,
+            diferencia,
+            observacion
+        )
+        SELECT
+            $1,
+            (NOW() AT TIME ZONE 'America/Lima')::date,
+            resumen.monto_esperado,
+            $2,
+            $2 - resumen.monto_esperado,
+            $3
+        FROM resumen
+        RETURNING *;
+    `;
+
+    const result = await pool.query(query, [
+        usuarioId,
+        monto.toFixed(2),
+        observacion?.trim() || null
+    ]);
+
+    return result.rows[0];
+};

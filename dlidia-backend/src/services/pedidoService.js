@@ -167,3 +167,51 @@ export const asignarMotorizado = async ({
     io.emit('estado_actualizado', pedidoActualizado);
     return pedidoActualizado;
 };
+
+export const cerrarCaja = async ({
+    usuarioId,
+    usuarioRol,
+    montoContado,
+    observacion
+}) => {
+    if (!['Cajero', 'Administradora'].includes(usuarioRol)) {
+        const error = new Error(
+            'Solo Cajero o Administradora pueden registrar un cierre de caja'
+        );
+        error.status = 403;
+        throw error;
+    }
+
+    const id = Number(usuarioId);
+    const monto = Number(montoContado);
+
+    if (!Number.isInteger(id) || id <= 0) {
+        const error = new Error('El usuario no es válido');
+        error.status = 400;
+        throw error;
+    }
+
+    if (!Number.isFinite(monto) || monto < 0) {
+        const error = new Error(
+            'El monto contado debe ser un número válido mayor o igual a cero'
+        );
+        error.status = 400;
+        throw error;
+    }
+
+    if (
+        observacion !== undefined &&
+        observacion !== null &&
+        typeof observacion !== 'string'
+    ) {
+        const error = new Error('La observación debe ser texto');
+        error.status = 400;
+        throw error;
+    }
+
+    return await pedidoRepository.registrarCierreCaja({
+        usuarioId: id,
+        montoContado: monto,
+        observacion: observacion?.trim() || null
+    });
+};
