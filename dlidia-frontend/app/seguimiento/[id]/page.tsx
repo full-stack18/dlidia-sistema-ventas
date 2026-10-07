@@ -100,7 +100,7 @@ const pasosPedido =
     : PASOS_SIN_DELIVERY;
 
 const pasoActual = pasosPedido.indexOf(pedido.estado);
-
+const pedidoCancelado = pedido.estado === 'Cancelado';
 const esperandoMotorizado =
   pedido.tipo_entrega === "Delivery" &&
   pedido.estado === "Listo";
@@ -113,28 +113,48 @@ const esperandoMotorizado =
           <h1 className="text-4xl font-extrabold text-[#1a1210]">#{pedido.id}</h1>
         </div>
 
-        <div className="flex items-center justify-between mb-8">
-          {pasosPedido.map((paso, i) => (
-            <div key={paso} className="relative flex min-w-0 flex-1 flex-col items-center">
-              {i > 0 && (
+        {pedidoCancelado ? (
+          <div className="mb-8 rounded-xl border border-red-200 bg-red-50 p-5 text-center">
+            <p className="text-xl font-extrabold text-red-700">
+              Pedido cancelado
+            </p>
+            <p className="mt-2 text-sm text-red-600">
+              Este pedido fue anulado y ya no continuará en preparación ni entrega.
+            </p>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between mb-8">
+            {pasosPedido.map((paso, i) => (
+              <div key={paso} className="relative flex min-w-0 flex-1 flex-col items-center">
+                {i > 0 && (
+                  <div
+                    className={`absolute top-4 right-1/2 w-full h-1 -z-10 ${
+                      i <= pasoActual ? 'bg-[#DCA11D]' : 'bg-gray-200'
+                    }`}
+                  />
+                )}
+
                 <div
-                  className={`absolute top-4 right-1/2 w-full h-1 -z-10 ${i <= pasoActual ? 'bg-[#DCA11D]' : 'bg-gray-200'}`}
-                />
-              )}
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm
-                  ${i <= pasoActual ? 'bg-[#DCA11D] text-[#1a1210]' : 'bg-gray-200 text-gray-400'}`}
-              >
-                {i < pasoActual ? '✓' : i + 1}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                    i <= pasoActual
+                      ? 'bg-[#DCA11D] text-[#1a1210]'
+                      : 'bg-gray-200 text-gray-400'
+                  }`}
+                >
+                  {i < pasoActual ? '✓' : i + 1}
+                </div>
+
+                <p
+                  className={`mx-auto mt-2 min-h-10 w-full max-w-18 px-1 whitespace-normal break-normal text-center text-[10px] font-bold leading-tight ${
+                    i <= pasoActual ? 'text-[#1a1210]' : 'text-gray-400'
+                  }`}
+                >
+                  {paso}
+                </p>
               </div>
-              <p className={`mx-auto mt-2 min-h-10 w-full max-w-18 px-1 whitespace-normal break-normal text-center text-[10px] font-bold leading-tight ${
-                              i <= pasoActual ? "text-[#1a1210]" : "text-gray-400"
-                            }`}>
-                {paso}
-              </p>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {esperandoMotorizado && (
           <p className="text-center text-blue-600 font-bold bg-blue-50 rounded-lg py-3 mb-6">

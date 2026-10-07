@@ -131,23 +131,40 @@ export default function PanelAdministrativo() {
 
   const cambiarEstado = async (id: number, nuevoEstado: string) => {
     const token = localStorage.getItem('dlidia_token');
+
     try {
       const res = await fetch(`${API_URL}/api/pedidos/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({ estado: nuevoEstado })
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        const data = await res.json();
         alert(data.error || 'No se pudo actualizar el estado del pedido.');
+        return;
       }
+
+      setPedidos((actuales) =>
+        actuales.map((pedido) => (pedido.id === id ? data : pedido))
+      );
     } catch (error) {
       alert('Error de conexión al actualizar el estado.');
     }
+  };
+
+  const anularPedido = async (pedidoId: number) => {
+    const confirmar = window.confirm(
+      `¿Seguro que deseas anular el pedido #${pedidoId}? Esta acción quedará registrada.`
+    );
+
+    if (!confirmar) return;
+
+    await cambiarEstado(pedidoId, 'Cancelado');
   };
 
   const asignarMotorizado = async (pedidoId: number) => {
@@ -353,6 +370,18 @@ export default function PanelAdministrativo() {
               </button>
             )}
             </div>
+
+              {esAdministradora &&
+              !['Entregado', 'Cancelado'].includes(pedido.estado) && (
+                <button
+                  type="button"
+                  onClick={() => anularPedido(pedido.id)}
+                  className="mt-3 w-full rounded-lg bg-red-600 py-2 font-bold text-white hover:bg-red-700"
+                >
+                  Anular pedido
+                </button>
+              )}
+
           </div>
         ))}
       </div>

@@ -68,6 +68,30 @@ export const cuadreDeCaja = async (req, res) => {
     }
 };
 
+export const obtenerAnulacionesCaja = async (req, res) => {
+    try {
+        const hoyLima = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/Lima',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        }).format(new Date());
+
+        const fechaConsulta = req.query.fecha || hoyLima;
+
+        const anulaciones = await pedidoService.obtenerAnulacionesParaCaja(
+            fechaConsulta,
+            req.usuario?.rol
+        );
+
+        return res.status(200).json(anulaciones);
+    } catch (error) {
+        return res.status(error.status || 500).json({
+            error: error.message || 'Error al consultar las anulaciones'
+        });
+    }
+};
+
 export const obtenerPedidosPendientesDePago = async (req, res) => {
     try {
         const pedidos = await pedidoService.listarPedidosPendientesDePago(
@@ -148,6 +172,22 @@ export const registrarCierreCaja = async (req, res) => {
 
         return res.status(error.status || 500).json({
             error: error.message || 'Error al registrar el cierre de caja'
+        });
+    }
+};
+
+export const obtenerHistorialCierresCaja = async (req, res) => {
+    try {
+        const cierres = await pedidoService.consultarHistorialCierresCaja(
+            req.usuario
+        );
+
+        return res.status(200).json(cierres);
+    } catch (error) {
+        console.error(error);
+
+        return res.status(error.status || 500).json({
+            error: error.message || 'Error al consultar el historial de cierres'
         });
     }
 };

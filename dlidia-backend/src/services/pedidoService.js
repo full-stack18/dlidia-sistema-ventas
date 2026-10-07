@@ -63,6 +63,32 @@ export const cambiarEstadoPedido = async (id, nuevoEstado, io, usuarioRol, usuar
         throw err;
     }
 
+    if (nuevoEstado === 'Cancelado') {
+        if (usuarioRol !== 'Administradora') {
+            const error = new Error('Solo la administradora puede anular pedidos');
+            error.status = 403;
+            throw error;
+        }
+
+        if (['Entregado', 'Cancelado'].includes(pedidoActual.estado)) {
+            const error = new Error(
+                'No se puede anular un pedido entregado o ya anulado'
+            );
+            error.status = 409;
+            throw error;
+        }
+
+        const pagado = await pedidoRepository.tienePagoConfirmado(id);
+
+        if (pagado) {
+            const error = new Error(
+                'No se puede anular un pedido que ya tiene un pago confirmado'
+            );
+            error.status = 409;
+            throw error;
+        }
+    }
+
     // Regla de negocio: solo Motorizado (o Administradora, como override) cierra un delivery
     if (pedidoActual.tipo_entrega === 'Delivery' && nuevoEstado === 'Entregado') {
         if (!['Motorizado', 'Administradora'].includes(usuarioRol)) {
@@ -89,6 +115,24 @@ export const listarPedidosDelivery = async (usuarioId, usuarioRol) => {
 
 export const obtenerVentasParaCaja = async (fecha) => {
     return await pedidoRepository.obtenerVentasDelDia(fecha);
+};
+
+export const obtenerAnulacionesParaCaja = async (fecha, usuarioRol) => {
+    if (!['Cajero', 'Administradora'].includes(usuarioRol)) {
+        const error = new Error(
+            'Solo Cajero o Administradora pueden consultar las anulaciones'
+        );
+        error.status = 403;
+        throw error;
+    }
+
+    if (typeof fecha !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+        const error = new Error('La fecha debe tener el formato AAAA-MM-DD');
+        error.status = 400;
+        throw error;
+    }
+
+    return await pedidoRepository.obtenerAnulacionesDelDia(fecha);
 };
 
 export const listarPedidosPendientesDePago = async (usuarioRol) => {
@@ -214,4 +258,27 @@ export const cerrarCaja = async ({
         montoContado: monto,
         observacion: observacion?.trim() || null
     });
+};
+
+export const consultarHistorialCierresCaja = async (usuario) => {
+    if (!usuario || !['Cajero', 'Administradora'].includes(usuario.rol)) {
+        const error = new Error(
+            'Solo Cajero o Administradora pueden consultar el historial de cierres'
+        );
+        error.status = 403;
+        throw error;
+    }
+
+    const usuarioId = Number(usuario.id);
+
+    if (!Number.isInteger(usuarioId) || usuarioId <= 0) {
+        const error = new Error('El usuario no es válido');
+        error.status = 400;
+        throw error;
+    }
+
+    return await pedidoRepository.obtenerHistorialCierresCaja(
+        usuarioId,
+        usuario.rol
+    );
 };

@@ -32,11 +32,26 @@ interface DetalleVenta {
 }
 
 interface CierreCaja {
+  cierre_id: number;
+  usuario_id: number;
+  usuario: string;
   fecha_cierre: string;
   monto_esperado: number | string;
   monto_contado: number | string;
   diferencia: number | string;
   observacion: string | null;
+}
+
+interface AnulacionCaja {
+  historial_id: number;
+  pedido_id: number;
+  origen: string;
+  tipo_entrega: string;
+  total: number | string;
+  nombre_cliente: string | null;
+  estado_anterior: string | null;
+  fecha_anulacion: string;
+  usuario: string | null;
 }
 
 const obtenerFechaLocal = () => {
@@ -62,6 +77,12 @@ export default function CuadreCaja() {
   const [observacionCierre, setObservacionCierre] = useState('');
   const [cerrandoCaja, setCerrandoCaja] = useState(false);
   const [cierreRegistrado, setCierreRegistrado] = useState<CierreCaja | null>(null);
+  const [historialCierres, setHistorialCierres] = useState<CierreCaja[]>([]);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
+  const [errorHistorial, setErrorHistorial] = useState('');
+  const [anulaciones, setAnulaciones] = useState<AnulacionCaja[]>([]);
+  const [cargandoAnulaciones, setCargandoAnulaciones] = useState(false);
+  const [errorAnulaciones, setErrorAnulaciones] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('dlidia_token');
@@ -83,6 +104,8 @@ export default function CuadreCaja() {
 
     cargarCaja();
     cargarPedidosPendientes();
+    cargarHistorialCierres();
+    cargarAnulaciones();
   }, [fecha]);
 
   const cargarCaja = async () => {
@@ -130,6 +153,102 @@ export default function CuadreCaja() {
       setCargandoPendientes(false);
     }
   };
+
+  const cargarHistorialCierres = async () => {
+    setCargandoHistorial(true);
+    setErrorHistorial('');
+
+    const token = localStorage.getItem('dlidia_token');
+
+    if (!token) {
+      setErrorHistorial('Tu sesión expiró. Inicia sesión nuevamente.');
+      setCargandoHistorial(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/api/pedidos/caja/cierres`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'No se pudo cargar el historial de cierres');
+      }
+
+      const decoded: any = (jwtDecodeModule as any).jwtDecode(token);
+      const usuarioIdActual = Number(decoded.id);
+
+      const cierreDeHoy = data.find((cierre: CierreCaja) => {
+        const fechaDelCierre = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'America/Lima',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        }).format(new Date(cierre.fecha_cierre));
+
+        return (
+          Number(cierre.usuario_id) === usuarioIdActual &&
+          fechaDelCierre === obtenerFechaLocal()
+        );
+      });
+
+      setCierreRegistrado(cierreDeHoy ?? null);
+
+      setHistorialCierres(data);
+    } catch (error) {
+      setErrorHistorial(
+        error instanceof Error
+          ? error.message
+          : 'Ocurrió un error al cargar el historial'
+      );
+    } finally {
+      setCargandoHistorial(false);
+    }
+  };
+
+  const cargarAnulaciones = async () => {
+  setCargandoAnulaciones(true);
+  setErrorAnulaciones('');
+
+  const token = localStorage.getItem('dlidia_token');
+
+  if (!token) {
+    setErrorAnulaciones('Tu sesión expiró. Inicia sesión nuevamente.');
+    setCargandoAnulaciones(false);
+    return;
+  }
+
+  try {
+    const res = await fetch(
+      `${API_URL}/api/pedidos/caja/anulaciones?fecha=${fecha}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || 'No se pudieron cargar las anulaciones');
+    }
+
+    setAnulaciones(data);
+  } catch (error) {
+    setErrorAnulaciones(
+      error instanceof Error
+        ? error.message
+        : 'Ocurrió un error al cargar las anulaciones'
+    );
+  } finally {
+    setCargandoAnulaciones(false);
+  }
+};
 
   const registrarPago = async (pedidoId: number) => {
   const token = localStorage.getItem('dlidia_token');
@@ -331,6 +450,136 @@ const registrarCierre = async () => {
               </div>
             )}
           </section>
+
+          <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-8">
+            <h2 className="text-xl font-extrabold text-gray-900 mb-4">
+              Historial de cierres de caja
+            </h2>
+
+            {cargandoHistorial ? (
+              <p className="text-gray-500">Cargando historial...</p>
+            ) : errorHistorial ? (
+              <p className="text-red-600">{errorHistorial}</p>
+            ) : historialCierres.length === 0 ? (
+              <p className="text-gray-500">Todavía no hay cierres registrados.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 text-gray-600 text-sm uppercase border-b">
+                      <th className="p-3">Fecha</th>
+                      <th className="p-3">Usuario</th>
+                      <th className="p-3 text-right">Esperado</th>
+                      <th className="p-3 text-right">Contado</th>
+                      <th className="p-3 text-right">Diferencia</th>
+                      <th className="p-3">Observación</th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-gray-100">
+                    {historialCierres.map((cierre) => (
+                      <tr key={cierre.cierre_id} className="hover:bg-gray-50">
+                        <td className="p-3 text-gray-700">
+                          {new Date(cierre.fecha_cierre).toLocaleDateString('es-PE', {
+                            timeZone: 'America/Lima'
+                          })}
+                        </td>
+                        <td className="p-3 text-gray-700">{cierre.usuario}</td>
+                        <td className="p-3 text-right text-gray-700">
+                          S/ {Number(cierre.monto_esperado).toFixed(2)}
+                        </td>
+                        <td className="p-3 text-right text-gray-700">
+                          S/ {Number(cierre.monto_contado).toFixed(2)}
+                        </td>
+                        <td className="p-3 text-right font-bold text-gray-900">
+                          S/ {Number(cierre.diferencia).toFixed(2)}
+                        </td>
+                        <td className="p-3 text-gray-700">
+                          {cierre.observacion || '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+              <div>
+                <h2 className="text-xl font-extrabold text-gray-900">
+                  Pedidos anulados
+                </h2>
+                <p className="text-sm text-gray-500">
+                  Anulaciones registradas en la fecha seleccionada.
+                </p>
+              </div>
+
+              <div className="rounded-lg bg-red-50 px-4 py-2 text-red-800">
+                <span className="font-semibold">Cantidad: </span>
+                {anulaciones.length}
+              </div>
+            </div>
+
+            {cargandoAnulaciones ? (
+              <p className="text-gray-500">Cargando anulaciones...</p>
+            ) : errorAnulaciones ? (
+              <p className="text-red-600">{errorAnulaciones}</p>
+            ) : anulaciones.length === 0 ? (
+              <p className="rounded-lg bg-gray-50 p-4 text-gray-500">
+                No hay pedidos anulados en esta fecha.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 text-gray-600 text-sm uppercase border-b">
+                      <th className="p-3">Pedido</th>
+                      <th className="p-3">Fecha de anulación</th>
+                      <th className="p-3">Cliente</th>
+                      <th className="p-3">Entrega</th>
+                      <th className="p-3">Anulado por</th>
+                      <th className="p-3 text-right">Monto anulado</th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-gray-100">
+                    {anulaciones.map((anulacion) => (
+                      <tr key={anulacion.historial_id} className="hover:bg-gray-50">
+                        <td className="p-3 font-bold text-gray-900">
+                          #{anulacion.pedido_id}
+                        </td>
+                        <td className="p-3 text-gray-700">
+                          {new Date(anulacion.fecha_anulacion).toLocaleString('es-PE', {
+                            timeZone: 'America/Lima'
+                          })}
+                        </td>
+                        <td className="p-3 text-gray-700">
+                          {anulacion.nombre_cliente || 'Sin nombre'}
+                        </td>
+                        <td className="p-3 text-gray-700">
+                          {anulacion.tipo_entrega}
+                        </td>
+                        <td className="p-3 text-gray-700">
+                          {anulacion.usuario || 'No identificado'}
+                        </td>
+                        <td className="p-3 text-right font-semibold text-red-700">
+                          S/ {Number(anulacion.total).toFixed(2)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {anulaciones.length > 0 && (
+              <p className="mt-4 text-sm text-gray-500">
+                El monto anulado se muestra por separado y no forma parte de los ingresos.
+              </p>
+            )}
+          </section>  
 
           <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-8">
             <h2 className="text-xl font-extrabold text-gray-900 mb-4">

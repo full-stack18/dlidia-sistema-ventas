@@ -258,6 +258,30 @@ export const obtenerVentasDelDia = async (fecha) => {
     return result.rows;
 };
 
+export const obtenerAnulacionesDelDia = async (fecha) => {
+    const query = `
+        SELECT
+            h.id AS historial_id,
+            p.id AS pedido_id,
+            p.origen,
+            p.tipo_entrega,
+            p.total,
+            p.nombre_cliente,
+            h.estado_anterior,
+            h.fecha_cambio AS fecha_anulacion,
+            u.username AS usuario
+        FROM historial_estados_pedido h
+        INNER JOIN pedidos p ON p.id = h.pedido_id
+        LEFT JOIN usuarios u ON u.id = h.usuario_id
+        WHERE h.estado_nuevo = 'Cancelado'
+          AND (h.fecha_cambio AT TIME ZONE 'America/Lima')::date = $1::date
+        ORDER BY h.fecha_cambio DESC;
+    `;
+
+    const result = await pool.query(query, [fecha]);
+    return result.rows;
+};
+
 export const obtenerPedidosPendientesDePago = async () => {
     const query = `
         ${consultaPedidosConDetalles}
@@ -453,4 +477,58 @@ export const registrarCierreCaja = async ({
     ]);
 
     return result.rows[0];
+};
+
+export const obtenerHistorialCierresCaja = async (usuarioId, usuarioRol) => {
+    if (usuarioRol === 'Administradora') {
+        const result = await pool.query(`
+            SELECT
+                cc.cierre_id,
+                cc.usuario_id,
+                u.username AS usuario,
+                cc.fecha_cierre,
+                cc.monto_esperado,
+                cc.monto_contado,
+                cc.diferencia,
+                cc.observacion,
+                cc.fecha_registro
+            FROM cierres_caja cc
+            INNER JOIN usuarios u ON u.id = cc.usuario_id
+            ORDER BY cc.fecha_cierre DESC, cc.fecha_registro DESC;
+        `);
+
+        return result.rows;
+    }
+
+    const result = await pool.query(`
+        SELECT
+            cc.cierre_id,
+            cc.usuario_id,
+            u.username AS usuario,
+            cc.fecha_cierre,
+            cc.monto_esperado,
+            cc.monto_contado,
+            cc.diferencia,
+            cc.observacion,
+            cc.fecha_registro
+        FROM cierres_caja cc
+        INNER JOIN usuarios u ON u.id = cc.usuario_id
+        WHERE cc.usuario_id = $1
+        ORDER BY cc.fecha_cierre DESC, cc.fecha_registro DESC;
+    `, [usuarioId]);
+
+    return result.rows;
+};
+
+export const tienePagoConfirmado = async (pedidoId) => {
+    const result = await pool.query(`
+        SELECT EXISTS (
+            SELECT 1
+            FROM pagos
+            WHERE pedido_id = $1
+              AND estado = 'Confirmado'
+        ) AS pagado;
+    `, [pedidoId]);
+
+    return result.rows[0].pagado;
 };
