@@ -24,3 +24,21 @@ export const verificarToken = (req, res, next) => {
         return res.status(401).json({ error: 'Token inválido o expirado' });
     }
 };
+
+export const autorizarRoles = (...rolesPermitidos) => {
+    return (req, res, next) => {
+        if (!req.usuario) {
+            return res.status(401).json({
+                error: 'Debes iniciar sesión para realizar esta acción'
+            });
+        }
+
+        if (!rolesPermitidos.includes(req.usuario.rol)) {
+            return res.status(403).json({
+                error: 'No tienes permisos para realizar esta acción'
+            });
+        }
+
+        next();
+    };
+};

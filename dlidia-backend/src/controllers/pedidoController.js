@@ -1,74 +1,87 @@
 import * as pedidoService from '../services/pedidoService.js';
 
-export const crearPedido = async (req, res) => {
+export const crearPedido = async (req, res, next) => {
     try {
         const pedido = await pedidoService.procesarNuevoPedido(req.body, req.io);
-        res.status(201).json({
+
+        return res.status(201).json({
             mensaje: 'Pedido creado exitosamente',
             pedido
         });
     } catch (error) {
-        console.error(error);
-        res.status(error.status || 500).json({
-            error: error.status ? error.message : 'Error al crear el pedido'
-        });
+        next(error);
     }
 };
 
-export const obtenerPedidos = async (req, res) => {
+export const obtenerPedidos = async (req, res, next) => {
     try {
-        const pedidos = await pedidoService.listarPedidos();
-        res.status(200).json(pedidos);
+        const pedidos = await pedidoService.listarPedidos(req.usuario.rol);
+        return res.status(200).json(pedidos);
     } catch (error) {
-        res.status(500).json({ error: 'Error al obtener los pedidos' });
+        next(error);
     }
 };
 
-export const actualizarEstado = async (req, res) => {
+export const actualizarEstado = async (req, res, next) => {
     try {
         const { id } = req.params;
         const { estado } = req.body;
-        const pedido = await pedidoService.cambiarEstadoPedido(id, estado, req.io, req.usuario.rol, req.usuario.id);
-        res.status(200).json(pedido);
+
+        const pedido = await pedidoService.cambiarEstadoPedido(
+            id,
+            estado,
+            req.io,
+            req.usuario.rol,
+            req.usuario.id
+        );
+
+        return res.status(200).json(pedido);
     } catch (error) {
-        console.error(error);
-        res.status(error.status || 500).json({ error: error.message || 'Error al actualizar estado' });
+        next(error);
     }
 };
 
-export const obtenerDelivery = async (req, res) => {
+export const obtenerDelivery = async (req, res, next) => {
     try {
         const pedidos = await pedidoService.listarPedidosDelivery(
             req.usuario.id,
             req.usuario.rol
         );
-        res.status(200).json(pedidos);
+
+        return res.status(200).json(pedidos);
     } catch (error) {
-        res.status(error.status || 500).json({
-            error: error.message || 'Error al cargar pedidos de delivery'
-        });
+        next(error);
     }
 };
 
-export const cuadreDeCaja = async (req, res) => {
+export const cuadreDeCaja = async (req, res, next) => {
     if (!['Cajero', 'Administradora'].includes(req.usuario?.rol)) {
         return res.status(403).json({
             error: 'Solo Cajero o Administradora pueden consultar la caja'
         });
     }
-    
+
     try {
-        const fechaConsulta = req.query.fecha || new Date().toISOString().split('T')[0];
+        const fechaConsulta =
+            req.query.fecha || new Date().toISOString().split('T')[0];
+
         const ventas = await pedidoService.obtenerVentasParaCaja(fechaConsulta);
-        const totalCaja = ventas.reduce((sum, pedido) => sum + Number(pedido.total), 0);
-        res.status(200).json({ fecha: fechaConsulta, total: totalCaja, ventas });
+        const totalCaja = ventas.reduce(
+            (sum, pedido) => sum + Number(pedido.total),
+            0
+        );
+
+        return res.status(200).json({
+            fecha: fechaConsulta,
+            total: totalCaja,
+            ventas
+        });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Error al generar el cuadre de caja' });
+        next(error);
     }
 };
 
-export const obtenerAnulacionesCaja = async (req, res) => {
+export const obtenerAnulacionesCaja = async (req, res, next) => {
     try {
         const hoyLima = new Intl.DateTimeFormat('en-CA', {
             timeZone: 'America/Lima',
@@ -86,52 +99,54 @@ export const obtenerAnulacionesCaja = async (req, res) => {
 
         return res.status(200).json(anulaciones);
     } catch (error) {
-        return res.status(error.status || 500).json({
-            error: error.message || 'Error al consultar las anulaciones'
-        });
+        next(error);
     }
 };
 
-export const obtenerPedidosPendientesDePago = async (req, res) => {
+export const obtenerPedidosPendientesDePago = async (req, res, next) => {
     try {
         const pedidos = await pedidoService.listarPedidosPendientesDePago(
             req.usuario.rol
         );
 
-        res.status(200).json(pedidos);
+        return res.status(200).json(pedidos);
     } catch (error) {
-        res.status(error.status || 500).json({
-            error: error.message || 'Error al cargar pedidos pendientes de pago'
-        });
+        next(error);
     }
 };
 
-export const consultarEstadoPublico = async (req, res) => {
+export const consultarEstadoPublico = async (req, res, next) => {
     try {
         const { id } = req.params;
         const pedido = await pedidoService.obtenerEstadoPedido(id);
-        if (!pedido) return res.status(404).json({ error: 'Pedido no encontrado' });
-        res.status(200).json(pedido);
+
+        if (!pedido) {
+            return res.status(404).json({ error: 'Pedido no encontrado' });
+        }
+
+        return res.status(200).json({
+            id: pedido.id,
+            estado: pedido.estado,
+            tipo_entrega: pedido.tipo_entrega
+        });
     } catch (error) {
-        res.status(500).json({ error: 'Error al consultar el estado del pedido' });
+        next(error);
     }
 };
 
-export const obtenerMotorizados = async (req, res) => {
+export const obtenerMotorizados = async (req, res, next) => {
     try {
         const motorizados = await pedidoService.listarMotorizados(
             req.usuario.rol
         );
 
-        res.status(200).json(motorizados);
+        return res.status(200).json(motorizados);
     } catch (error) {
-        res.status(error.status || 500).json({
-            error: error.message || 'Error al obtener los motorizados'
-        });
+        next(error);
     }
 };
 
-export const asignarMotorizado = async (req, res) => {
+export const asignarMotorizado = async (req, res, next) => {
     try {
         const pedido = await pedidoService.asignarMotorizado({
             pedidoId: req.params.id,
@@ -140,15 +155,13 @@ export const asignarMotorizado = async (req, res) => {
             io: req.io
         });
 
-        res.status(200).json(pedido);
+        return res.status(200).json(pedido);
     } catch (error) {
-        res.status(error.status || 500).json({
-            error: error.message || 'Error al asignar el motorizado'
-        });
+        next(error);
     }
 };
 
-export const registrarCierreCaja = async (req, res) => {
+export const registrarCierreCaja = async (req, res, next) => {
     try {
         const cierre = await pedidoService.cerrarCaja({
             usuarioId: req.usuario.id,
@@ -162,21 +175,16 @@ export const registrarCierreCaja = async (req, res) => {
             cierre
         });
     } catch (error) {
-        console.error(error);
-
         if (error.code === '23505') {
-            return res.status(409).json({
-                error: 'Este usuario ya registró un cierre para hoy'
-            });
+            error.status = 409;
+            error.message = 'Este usuario ya registró un cierre para hoy';
         }
 
-        return res.status(error.status || 500).json({
-            error: error.message || 'Error al registrar el cierre de caja'
-        });
+        next(error);
     }
 };
 
-export const obtenerHistorialCierresCaja = async (req, res) => {
+export const obtenerHistorialCierresCaja = async (req, res, next) => {
     try {
         const cierres = await pedidoService.consultarHistorialCierresCaja(
             req.usuario
@@ -184,10 +192,6 @@ export const obtenerHistorialCierresCaja = async (req, res) => {
 
         return res.status(200).json(cierres);
     } catch (error) {
-        console.error(error);
-
-        return res.status(error.status || 500).json({
-            error: error.message || 'Error al consultar el historial de cierres'
-        });
+        next(error);
     }
 };

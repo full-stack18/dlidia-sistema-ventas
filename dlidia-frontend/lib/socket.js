@@ -1,7 +1,14 @@
-// dlidia-frontend/lib/socket.js
 import { io } from 'socket.io-client';
 import { API_URL } from './api';
 
 export const socket = io(API_URL, {
-    autoConnect: false // Se conectará solo cuando el cajero/motorizado abra la pantalla
+    autoConnect: false,
+    auth: (callback) => {
+        const token =
+            typeof window !== 'undefined'
+                ? localStorage.getItem('dlidia_token')
+                : null;
+
+        callback(token ? { token } : {});
+    }
 });

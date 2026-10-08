@@ -5,6 +5,26 @@ import {
     validarCambioEstado
 } from '../utils/pedidoStateMachine.js';
 
+const emitirEstadoPedido = (io, pedido) => {
+    // Avisar al personal de Cocina y Administración.
+    io.to('role:Cocina')
+        .to('role:Administradora')
+        .emit('estado_actualizado', pedido);
+
+    // Avisar solo al motorizado asignado.
+    if (pedido.motorizado_id) {
+        io.to(`user:${pedido.motorizado_id}`)
+            .emit('estado_actualizado', pedido);
+    }
+
+    // Enviar al cliente únicamente los datos necesarios para su seguimiento.
+    io.to(`pedido:${pedido.id}`).emit('estado_publico_actualizado', {
+        id: pedido.id,
+        estado: pedido.estado,
+        tipo_entrega: pedido.tipo_entrega
+    });
+};
+
 export const procesarNuevoPedido = async (datosPedido, io) => {
     const { tipoEntrega, nombreCliente, telefonoCliente, direccionEntrega } = datosPedido;
     const tiposEntregaPermitidos = ['Mesa', 'Para Llevar', 'Delivery'];
@@ -47,11 +67,21 @@ export const procesarNuevoPedido = async (datosPedido, io) => {
         items: itemsNormalizados
     });
 
-    io.emit('nuevo_pedido', nuevoPedido);
+    io.to('role:Cocina')
+    .to('role:Administradora')
+    .emit('nuevo_pedido', nuevoPedido);
     return nuevoPedido;
 };
 
-export const listarPedidos = async () => {
+export const listarPedidos = async (usuarioRol) => {
+    if (!['Cajero', 'Administradora', 'Cocina'].includes(usuarioRol)) {
+        const error = new Error(
+            'No tienes permisos para consultar todos los pedidos'
+        );
+        error.status = 403;
+        throw error;
+    }
+
     return await pedidoRepository.obtenerTodosLosPedidos();
 };
 
@@ -61,6 +91,20 @@ export const cambiarEstadoPedido = async (id, nuevoEstado, io, usuarioRol, usuar
         const err = new Error('Pedido no encontrado');
         err.status = 404;
         throw err;
+    }
+
+    if (
+        usuarioRol === 'Motorizado' &&
+        (
+            pedidoActual.tipo_entrega !== 'Delivery' ||
+            Number(pedidoActual.motorizado_id) !== Number(usuarioId)
+        )
+    ) {
+        const error = new Error(
+            'Solo puedes actualizar pedidos Delivery asignados a tu usuario'
+        );
+        error.status = 403;
+        throw error;
     }
 
     if (nuevoEstado === 'Cancelado') {
@@ -98,8 +142,14 @@ export const cambiarEstadoPedido = async (id, nuevoEstado, io, usuarioRol, usuar
         }
     }
 
+    validarCambioEstado({
+        estadoActual: pedidoActual.estado,
+        nuevoEstado,
+        tipoEntrega: pedidoActual.tipo_entrega
+    });
+
     const pedidoActualizado = await pedidoRepository.actualizarEstado(id, nuevoEstado, usuarioId);
-    io.emit('estado_actualizado', pedidoActualizado);
+    emitirEstadoPedido(io, pedidoActualizado);
     return pedidoActualizado;
 };
 
@@ -208,7 +258,7 @@ export const asignarMotorizado = async ({
             usuarioAdminId: usuario.id
         });
 
-    io.emit('estado_actualizado', pedidoActualizado);
+    emitirEstadoPedido(io, pedidoActualizado);
     return pedidoActualizado;
 };
 

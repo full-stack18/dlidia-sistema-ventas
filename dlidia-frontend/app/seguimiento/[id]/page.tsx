@@ -2,8 +2,8 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { socket } from '../../../lib/socket';
 import { API_URL } from '@/lib/api';
+import { socket } from '../../../lib/socket';
 
 interface EstadoPedido {
   id: number;
@@ -47,32 +47,86 @@ export default function SeguimientoPedido() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const cargarEstado = async () => {
+    let activo = true;
+
+    const cargarEstadoInicial = async () => {
       try {
         const res = await fetch(`${API_URL}/api/pedidos/estado/${id}`);
+
+        if (!activo) return;
+
         if (res.ok) {
           const data = await res.json();
-          setPedido(data);
+          if (activo) setPedido(data);
         } else {
-          setError('No encontramos ese pedido.');
+          if (activo) setError('No encontramos ese pedido.');
         }
-      } catch (err) {
-        setError('Error de conexión al consultar tu pedido.');
+      } catch {
+        if (activo) setError('Error de conexión al consultar tu pedido.');
       } finally {
-        setCargando(false);
+        if (activo) setCargando(false);
       }
     };
-    cargarEstado();
 
+    const actualizarSeguimiento = (pedidoActualizado: {
+      id: number;
+      estado: string;
+      tipo_entrega: string;
+    }) => {
+      if (String(pedidoActualizado.id) !== String(id)) return;
+
+      setPedido((anterior) =>
+        anterior
+          ? {
+              ...anterior,
+              estado: pedidoActualizado.estado,
+              tipo_entrega: pedidoActualizado.tipo_entrega
+            }
+          : anterior
+      );
+    };
+
+    const unirseAlSeguimiento = () => {
+      socket.emit(
+        'seguir_pedido',
+        id,
+        (respuesta: {
+          ok: boolean;
+          pedido?: {
+            estado: string;
+            tipo_entrega: string;
+          };
+        }) => {
+          if (!activo || !respuesta?.ok || !respuesta.pedido) return;
+
+          setPedido((anterior) =>
+            anterior
+              ? {
+                  ...anterior,
+                  estado: respuesta.pedido!.estado,
+                  tipo_entrega: respuesta.pedido!.tipo_entrega
+                }
+              : anterior
+          );
+        }
+      );
+    };
+
+    socket.on('estado_publico_actualizado', actualizarSeguimiento);
+    socket.on('connect', unirseAlSeguimiento);
     socket.connect();
-    socket.on('estado_actualizado', (pedidoActualizado) => {
-      if (String(pedidoActualizado.id) === String(id)) {
-        setPedido(pedidoActualizado);
-      }
-    });
+
+    // Si el socket ya estaba conectado, unirse de inmediato a la sala.
+    if (socket.connected) {
+      unirseAlSeguimiento();
+    }
+
+    cargarEstadoInicial();
 
     return () => {
-      socket.off('estado_actualizado');
+      activo = false;
+      socket.off('estado_publico_actualizado', actualizarSeguimiento);
+      socket.off('connect', unirseAlSeguimiento);
       socket.disconnect();
     };
   }, [id]);

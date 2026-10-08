@@ -1,41 +1,75 @@
 import * as platoRepository from '../repositories/platoRepository.js';
 
-export const obtenerPlatos = async (req, res) => {
+const crearErrorNoEncontrado = () => {
+    const error = new Error('Plato no encontrado');
+    error.status = 404;
+    return error;
+};
+
+export const obtenerPlatos = async (req, res, next) => {
     try {
         const platos = await platoRepository.obtenerPlatosActivos();
-        res.status(200).json(platos);
+        return res.status(200).json(platos);
     } catch (error) {
-        res.status(500).json({ error: 'Error al obtener el catálogo de platos' });
+        next(error);
     }
 };
 
-export const crear = async (req, res) => {
+export const crear = async (req, res, next) => {
     try {
         const { nombre, descripcion, precio, categoria, imagen_url } = req.body;
-        const nuevoPlato = await platoRepository.crearPlato(nombre, descripcion, precio, categoria, imagen_url);
-        res.status(201).json(nuevoPlato);
+
+        const nuevoPlato = await platoRepository.crearPlato(
+            nombre,
+            descripcion,
+            precio,
+            categoria,
+            imagen_url
+        );
+
+        return res.status(201).json(nuevoPlato);
     } catch (error) {
-        res.status(500).json({ error: 'Error al crear el plato' });
+        next(error);
     }
 };
 
-export const actualizar = async (req, res) => {
+export const actualizar = async (req, res, next) => {
     try {
         const { id } = req.params;
         const { nombre, descripcion, precio, categoria, imagen_url } = req.body;
-        const platoEditado = await platoRepository.actualizarPlato(id, nombre, descripcion, precio, categoria, imagen_url);
-        res.status(200).json(platoEditado);
+
+        const platoEditado = await platoRepository.actualizarPlato(
+            id,
+            nombre,
+            descripcion,
+            precio,
+            categoria,
+            imagen_url
+        );
+
+        if (!platoEditado) {
+            throw crearErrorNoEncontrado();
+        }
+
+        return res.status(200).json(platoEditado);
     } catch (error) {
-        res.status(500).json({ error: 'Error al actualizar el plato' });
+        next(error);
     }
 };
 
-export const eliminar = async (req, res) => {
+export const eliminar = async (req, res, next) => {
     try {
         const { id } = req.params;
-        await platoRepository.eliminarPlato(id);
-        res.status(200).json({ mensaje: 'Plato eliminado (ocultado) con éxito' });
+        const platoEliminado = await platoRepository.eliminarPlato(id);
+
+        if (!platoEliminado) {
+            throw crearErrorNoEncontrado();
+        }
+
+        return res.status(200).json({
+            mensaje: 'Plato eliminado (ocultado) con éxito'
+        });
     } catch (error) {
-        res.status(500).json({ error: 'Error al eliminar el plato' });
+        next(error);
     }
 };
