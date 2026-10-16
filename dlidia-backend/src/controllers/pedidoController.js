@@ -124,10 +124,11 @@ export const consultarEstadoPublico = async (req, res, next) => {
             return res.status(404).json({ error: 'Pedido no encontrado' });
         }
 
-        return res.status(200).json({
+       return res.status(200).json({
             id: pedido.id,
             estado: pedido.estado,
-            tipo_entrega: pedido.tipo_entrega
+            tipo_entrega: pedido.tipo_entrega,
+            total: Number(pedido.total)
         });
     } catch (error) {
         next(error);
