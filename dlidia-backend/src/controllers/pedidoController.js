@@ -15,7 +15,11 @@ export const crearPedido = async (req, res, next) => {
 
 export const obtenerPedidos = async (req, res, next) => {
     try {
-        const pedidos = await pedidoService.listarPedidos(req.usuario.rol);
+        const pedidos = await pedidoService.listarPedidos(
+            req.usuario.rol,
+            req.query.desde,
+            req.query.hasta
+        );
         return res.status(200).json(pedidos);
     } catch (error) {
         next(error);
@@ -62,17 +66,26 @@ export const cuadreDeCaja = async (req, res, next) => {
     }
 
     try {
-        const fechaConsulta =
-            req.query.fecha || new Date().toISOString().split('T')[0];
+        const hoyLima = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/Lima',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        }).format(new Date());
 
-        const ventas = await pedidoService.obtenerVentasParaCaja(fechaConsulta);
+        const desde = req.query.desde || hoyLima;
+        const hasta = req.query.hasta || desde;
+
+        const ventas = await pedidoService.obtenerVentasParaCaja(desde, hasta);
+
         const totalCaja = ventas.reduce(
             (sum, pedido) => sum + Number(pedido.total),
             0
         );
 
         return res.status(200).json({
-            fecha: fechaConsulta,
+            desde,
+            hasta,
             total: totalCaja,
             ventas
         });
@@ -90,10 +103,12 @@ export const obtenerAnulacionesCaja = async (req, res, next) => {
             day: '2-digit'
         }).format(new Date());
 
-        const fechaConsulta = req.query.fecha || hoyLima;
+        const desde = req.query.desde || hoyLima;
+        const hasta = req.query.hasta || desde;
 
         const anulaciones = await pedidoService.obtenerAnulacionesParaCaja(
-            fechaConsulta,
+            desde,
+            hasta,
             req.usuario?.rol
         );
 
@@ -192,6 +207,25 @@ export const obtenerHistorialCierresCaja = async (req, res, next) => {
         );
 
         return res.status(200).json(cierres);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const obtenerResumenCajaDiaria = async (req, res, next) => {
+    try {
+        const total = await pedidoService.obtenerCajaConfirmadaDeHoy(
+            req.usuario.rol
+        );
+
+        const fecha = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/Lima',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        }).format(new Date());
+
+        return res.status(200).json({ fecha, total });
     } catch (error) {
         next(error);
     }

@@ -5,6 +5,36 @@ import {
     validarCambioEstado
 } from '../utils/pedidoStateMachine.js';
 
+const esFechaValida = (fecha) => {
+    if (typeof fecha !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+        return false;
+    }
+
+    const fechaNormalizada = new Date(`${fecha}T00:00:00.000Z`)
+        .toISOString()
+        .slice(0, 10);
+
+    return fechaNormalizada === fecha;
+};
+
+const validarRangoFechas = (desde, hasta) => {
+    if (!esFechaValida(desde) || !esFechaValida(hasta)) {
+        const error = new Error(
+            'Desde y hasta deben tener el formato AAAA-MM-DD y ser fechas válidas'
+        );
+        error.status = 400;
+        throw error;
+    }
+
+    if (desde > hasta) {
+        const error = new Error(
+            'La fecha inicial no puede ser posterior a la fecha final'
+        );
+        error.status = 400;
+        throw error;
+    }
+};
+
 //OBSERVER
 const emitirEstadoPedido = (io, pedido) => {
     // Avisar al personal de Cocina y Administración.
@@ -75,7 +105,25 @@ export const procesarNuevoPedido = async (datosPedido, io) => {
     return nuevoPedido;
 };
 
-export const listarPedidos = async (usuarioRol) => {
+const fechaISOValida = (fecha) => {
+    if (
+        typeof fecha !== 'string' ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(fecha)
+    ) {
+        return false;
+    }
+
+    const [anio, mes, dia] = fecha.split('-').map(Number);
+    const fechaUTC = new Date(Date.UTC(anio, mes - 1, dia));
+
+    return (
+        fechaUTC.getUTCFullYear() === anio &&
+        fechaUTC.getUTCMonth() + 1 === mes &&
+        fechaUTC.getUTCDate() === dia
+    );
+};
+
+export const listarPedidos = async (usuarioRol, desde, hasta) => {
     if (!['Cajero', 'Administradora', 'Cocina'].includes(usuarioRol)) {
         const error = new Error(
             'No tienes permisos para consultar todos los pedidos'
@@ -84,7 +132,38 @@ export const listarPedidos = async (usuarioRol) => {
         throw error;
     }
 
-    return await pedidoRepository.obtenerTodosLosPedidos();
+    const tieneDesde = desde !== undefined && desde !== '';
+    const tieneHasta = hasta !== undefined && hasta !== '';
+
+    if (tieneDesde !== tieneHasta) {
+        const error = new Error(
+            'Debes enviar ambas fechas: desde y hasta'
+        );
+        error.status = 400;
+        throw error;
+    }
+
+    if (!tieneDesde) {
+        return await pedidoRepository.obtenerTodosLosPedidos();
+    }
+
+    if (!fechaISOValida(desde) || !fechaISOValida(hasta)) {
+        const error = new Error(
+            'Las fechas deben ser válidas y tener el formato AAAA-MM-DD'
+        );
+        error.status = 400;
+        throw error;
+    }
+
+    if (desde > hasta) {
+        const error = new Error(
+            'La fecha inicial no puede ser posterior a la fecha final'
+        );
+        error.status = 400;
+        throw error;
+    }
+
+    return await pedidoRepository.obtenerTodosLosPedidos(desde, hasta);
 };
 
 export const cambiarEstadoPedido = async (id, nuevoEstado, io, usuarioRol, usuarioId) => {
@@ -165,11 +244,24 @@ export const listarPedidosDelivery = async (usuarioId, usuarioRol) => {
     return await pedidoRepository.obtenerPedidosDelivery(usuarioId);
 };
 
-export const obtenerVentasParaCaja = async (fecha) => {
-    return await pedidoRepository.obtenerVentasDelDia(fecha);
+export const obtenerCajaConfirmadaDeHoy = async (usuarioRol) => {
+    if (!['Cajero', 'Administradora', 'Cocina'].includes(usuarioRol)) {
+        const error = new Error(
+            'No tienes permisos para consultar el resumen de caja'
+        );
+        error.status = 403;
+        throw error;
+    }
+
+    return await pedidoRepository.obtenerCajaConfirmadaDeHoy();
 };
 
-export const obtenerAnulacionesParaCaja = async (fecha, usuarioRol) => {
+export const obtenerVentasParaCaja = async (desde, hasta) => {
+    validarRangoFechas(desde, hasta);
+    return await pedidoRepository.obtenerVentasDelDia(desde, hasta);
+};
+
+export const obtenerAnulacionesParaCaja = async (desde, hasta, usuarioRol) => {
     if (!['Cajero', 'Administradora'].includes(usuarioRol)) {
         const error = new Error(
             'Solo Cajero o Administradora pueden consultar las anulaciones'
@@ -177,14 +269,8 @@ export const obtenerAnulacionesParaCaja = async (fecha, usuarioRol) => {
         error.status = 403;
         throw error;
     }
-
-    if (typeof fecha !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-        const error = new Error('La fecha debe tener el formato AAAA-MM-DD');
-        error.status = 400;
-        throw error;
-    }
-
-    return await pedidoRepository.obtenerAnulacionesDelDia(fecha);
+    validarRangoFechas(desde, hasta);
+    return await pedidoRepository.obtenerAnulacionesDelDia(desde, hasta);
 };
 
 export const listarPedidosPendientesDePago = async (usuarioRol) => {

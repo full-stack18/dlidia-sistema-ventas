@@ -200,60 +200,37 @@ export const guardarPedidoConDetalles = async ({
     }
 };
 
-export const obtenerTodosLosPedidos = async () => {
+export const obtenerTodosLosPedidos = async (desde = null, hasta = null) => {
+    const condiciones = [];
+    const parametros = [];
+
+    if (desde) {
+        parametros.push(desde);
+        condiciones.push(
+            `p.fecha_creacion::date >= $${parametros.length}::date`
+        );
+    }
+
+    if (hasta) {
+        parametros.push(hasta);
+        condiciones.push(
+            `p.fecha_creacion::date <= $${parametros.length}::date`
+        );
+    }
+
+    const filtroFecha = condiciones.length > 0
+        ? `WHERE ${condiciones.join(' AND ')}`
+        : '';
+
     const query = `
         ${consultaPedidosConDetalles}
+        ${filtroFecha}
         GROUP BY p.id
         ORDER BY p.fecha_creacion DESC;
     `;
-    const result = await pool.query(query);
+
+    const result = await pool.query(query, parametros);
     return result.rows;
-};
-
-export const actualizarEstado = async (id, nuevoEstado, usuarioId) => {
-    const client = await pool.connect();
-
-    try {
-        await client.query('BEGIN');
-
-        const pedidoActual = await client.query(
-            'SELECT estado FROM pedidos WHERE id = $1 FOR UPDATE;',
-            [id]
-        );
-
-        if (!pedidoActual.rows[0]) {
-            await client.query('ROLLBACK');
-            return undefined;
-        }
-
-        const estadoAnterior = pedidoActual.rows[0].estado;
-
-        await client.query(
-            'UPDATE pedidos SET estado = $1 WHERE id = $2;',
-            [nuevoEstado, id]
-        );
-
-        await client.query(
-            `INSERT INTO historial_estados_pedido (
-                pedido_id,
-                estado_anterior,
-                estado_nuevo,
-                usuario_id
-            )
-            VALUES ($1, $2, $3, $4);`,
-            [id, estadoAnterior, nuevoEstado, usuarioId ?? null]
-        );
-
-        const pedido = await obtenerPedidoCompletoConCliente(client, id);
-
-        await client.query('COMMIT');
-        return pedido;
-    } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-    } finally {
-        client.release();
-    }
 };
 
 export const obtenerPedidosDelivery = async (motorizadoId) => {
@@ -270,7 +247,7 @@ export const obtenerPedidosDelivery = async (motorizadoId) => {
     return result.rows;
 };
 
-export const obtenerVentasDelDia = async (fecha) => {
+export const obtenerVentasDelDia = async (desde, hasta) => {
     const query = `
         SELECT
             p.id,
@@ -296,7 +273,8 @@ export const obtenerVentasDelDia = async (fecha) => {
         LEFT JOIN detalle_pedidos d
             ON d.pedido_id = p.id
         WHERE pa.estado = 'Confirmado'
-          AND (pa.fecha_confirmacion AT TIME ZONE 'America/Lima')::date = $1::date
+          AND (pa.fecha_confirmacion AT TIME ZONE 'America/Lima')::date
+          BETWEEN $1::date AND $2::date
         GROUP BY
             p.id,
             p.origen,
@@ -308,11 +286,11 @@ export const obtenerVentasDelDia = async (fecha) => {
         ORDER BY pa.fecha_confirmacion DESC;
     `;
 
-    const result = await pool.query(query, [fecha]);
+    const result = await pool.query(query, [desde, hasta]);
     return result.rows;
 };
 
-export const obtenerAnulacionesDelDia = async (fecha) => {
+export const obtenerAnulacionesDelDia = async (desde, hasta) => {
     const query = `
         SELECT
             h.id AS historial_id,
@@ -328,11 +306,12 @@ export const obtenerAnulacionesDelDia = async (fecha) => {
         INNER JOIN pedidos p ON p.id = h.pedido_id
         LEFT JOIN usuarios u ON u.id = h.usuario_id
         WHERE h.estado_nuevo = 'Cancelado'
-          AND (h.fecha_cambio AT TIME ZONE 'America/Lima')::date = $1::date
+          AND (h.fecha_cambio AT TIME ZONE 'America/Lima')::date
+              BETWEEN $1::date AND $2::date
         ORDER BY h.fecha_cambio DESC;
     `;
 
-    const result = await pool.query(query, [fecha]);
+    const result = await pool.query(query, [desde, hasta]);
     return result.rows;
 };
 
@@ -585,4 +564,16 @@ export const tienePagoConfirmado = async (pedidoId) => {
     `, [pedidoId]);
 
     return result.rows[0].pagado;
+};
+
+export const obtenerCajaConfirmadaDeHoy = async () => {
+    const result = await pool.query(`
+        SELECT COALESCE(SUM(pa.importe), 0)::numeric(10, 2) AS total
+        FROM pagos pa
+        WHERE pa.estado = 'Confirmado'
+          AND (pa.fecha_confirmacion AT TIME ZONE 'America/Lima')::date =
+              (NOW() AT TIME ZONE 'America/Lima')::date;
+    `);
+
+    return Number(result.rows[0].total);
 };

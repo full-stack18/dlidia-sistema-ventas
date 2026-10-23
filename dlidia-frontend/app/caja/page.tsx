@@ -70,7 +70,8 @@ export default function CuadreCaja() {
   const [pedidoCobrando, setPedidoCobrando] = useState<number | null>(null);
   const [cargandoPendientes, setCargandoPendientes] = useState(false);  
   const [total, setTotal] = useState(0);
-  const [fecha, setFecha] = useState(obtenerFechaLocal());
+  const [fechaDesde, setFechaDesde] = useState(obtenerFechaLocal());
+  const [fechaHasta, setFechaHasta] = useState(obtenerFechaLocal());
   const [autorizado, setAutorizado] = useState(true);
   const [cargando, setCargando] = useState(true);
   const [montoContado, setMontoContado] = useState('');
@@ -102,17 +103,20 @@ export default function CuadreCaja() {
       return;
     }
 
-    cargarCaja();
+    if (fechaDesde && fechaHasta && fechaDesde <= fechaHasta) {
+      cargarCaja();
+      cargarAnulaciones();
+    }
+
     cargarPedidosPendientes();
     cargarHistorialCierres();
-    cargarAnulaciones();
-  }, [fecha]);
+  }, [fechaDesde, fechaHasta]);
 
   const cargarCaja = async () => {
     setCargando(true);
     const token = localStorage.getItem('dlidia_token');
     try {
-      const res = await fetch(`${API_URL}/api/pedidos/caja?fecha=${fecha}`, {
+      const res = await fetch(`${API_URL}/api/pedidos/caja?desde=${fechaDesde}&hasta=${fechaHasta}`,{
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -224,7 +228,7 @@ export default function CuadreCaja() {
 
   try {
     const res = await fetch(
-      `${API_URL}/api/pedidos/caja/anulaciones?fecha=${fecha}`,
+      `${API_URL}/api/pedidos/caja/anulaciones?desde=${fechaDesde}&hasta=${fechaHasta}`,
       {
         headers: {
           Authorization: `Bearer ${token}`
@@ -301,8 +305,8 @@ const registrarCierre = async () => {
     return;
   }
 
-  if (fecha !== obtenerFechaLocal()) {
-    alert('Solo puedes cerrar la caja de la fecha actual.');
+  if (fechaDesde !== obtenerFechaLocal() || fechaHasta !== obtenerFechaLocal()) {
+    alert('Solo puedes registrar el cierre cuando Desde y Hasta corresponden al día actual.');
     return;
   }
 
@@ -357,14 +361,28 @@ const registrarCierre = async () => {
               <p className="text-gray-500 font-medium">Revisión de ingresos diarios</p>
             </div>
 
-            <div className="flex items-center gap-4">
-              <label className="font-bold text-gray-700">Fecha:</label>
-              <input
-                type="date"
-                value={fecha}
-                onChange={(e) => setFecha(e.target.value)}
-                className="border-2 border-gray-300 rounded-lg p-2 font-bold text-gray-800 focus:border-red-600 focus:ring-0"
-              />
+           <div className="flex flex-col sm:flex-row items-center gap-4">
+              <label className="flex flex-col gap-1 font-bold text-gray-700">
+                Desde:
+                <input
+                  type="date"
+                  value={fechaDesde}
+                  max={fechaHasta}
+                  onChange={(e) => setFechaDesde(e.target.value)}
+                  className="border-2 border-gray-300 rounded-lg p-2 font-bold text-gray-800 focus:border-red-600 focus:ring-0"
+                />
+              </label>
+
+              <label className="flex flex-col gap-1 font-bold text-gray-700">
+                Hasta:
+                <input
+                  type="date"
+                  value={fechaHasta}
+                  min={fechaDesde}
+                  onChange={(e) => setFechaHasta(e.target.value)}
+                  className="border-2 border-gray-300 rounded-lg p-2 font-bold text-gray-800 focus:border-red-600 focus:ring-0"
+                />
+              </label>
             </div>
           </div>
 
@@ -391,7 +409,7 @@ const registrarCierre = async () => {
             </h2>
             <p className="text-sm text-gray-500 mb-5">
               Ingresa el efectivo que contaste físicamente. El sistema lo comparará
-              con los pagos en efectivo confirmados de hoy.
+              con los pagos en efectivo confirmados del día actual.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -420,16 +438,16 @@ const registrarCierre = async () => {
               </label>
             </div>
 
-            {fecha !== obtenerFechaLocal() && (
+            {(fechaDesde !== obtenerFechaLocal() || fechaHasta !== obtenerFechaLocal()) && (
               <p className="mt-3 text-sm text-amber-700">
-                Seleccionaste otra fecha. El cierre solo se registra para hoy.
+                Seleccionaste un rango distinto de hoy. El cierre solo se registra cuando el rango corresponde al día actual.
               </p>
             )}
 
             <button
               type="button"
               onClick={registrarCierre}
-              disabled={cerrandoCaja || cierreRegistrado !== null || fecha !== obtenerFechaLocal()}
+              disabled={cerrandoCaja || cierreRegistrado !== null || fechaDesde !== obtenerFechaLocal() || fechaHasta !== obtenerFechaLocal()}
               className="mt-5 rounded-lg bg-red-600 px-5 py-3 font-bold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {cerrandoCaja
@@ -512,7 +530,7 @@ const registrarCierre = async () => {
                   Pedidos anulados
                 </h2>
                 <p className="text-sm text-gray-500">
-                  Anulaciones registradas en la fecha seleccionada.
+                  Anulaciones registradas en el rango seleccionado.
                 </p>
               </div>
 
@@ -528,7 +546,7 @@ const registrarCierre = async () => {
               <p className="text-red-600">{errorAnulaciones}</p>
             ) : anulaciones.length === 0 ? (
               <p className="rounded-lg bg-gray-50 p-4 text-gray-500">
-                No hay pedidos anulados en esta fecha.
+                No hay pedidos anulados en el rango seleccionado.
               </p>
             ) : (
               <div className="overflow-x-auto">
@@ -658,7 +676,7 @@ const registrarCierre = async () => {
             {cargando ? (
               <div className="p-10 text-center text-gray-500 font-bold animate-pulse">Consultando base de datos...</div>
             ) : ventas.length === 0 ? (
-              <div className="p-10 text-center text-gray-500 font-medium">No hay ventas registradas para esta fecha.</div>
+              <div className="p-10 text-center text-gray-500 font-medium">No hay ventas registradas en el rango seleccionado.</div>
             ) : (
               <table className="w-full text-left border-collapse">
                 <thead>

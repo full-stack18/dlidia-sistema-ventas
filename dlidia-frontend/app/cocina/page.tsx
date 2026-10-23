@@ -13,6 +13,7 @@ interface Pedido {
   estado: string;
   detalles: DetallePedido[];
   motorizado_id?: number | null;
+  fecha_creacion: string;
 }
 
 interface Motorizado {
@@ -30,15 +31,34 @@ interface DetallePedido {
   observaciones?: string | null;
 }
 
+const obtenerFechaLima = (fecha: Date = new Date()) =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Lima',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(fecha);
 
+  const formatearFechaPedido = (fecha: string) =>
+  new Intl.DateTimeFormat('es-PE', {
+    timeZone: 'America/Lima',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour12: false
+  }).format(new Date(fecha));
 
 export default function PanelAdministrativo() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [autorizado, setAutorizado] = useState(true);
   const [motorizados, setMotorizados] = useState<Motorizado[]>([]);
   const [esAdministradora, setEsAdministradora] = useState(false);
-  const [motorizadoSeleccionado, setMotorizadoSeleccionado] =
-    useState<Record<number, string>>({});
+  const [motorizadoSeleccionado, setMotorizadoSeleccionado] = useState<Record<number, string>>({});
+  const [fechaDesde, setFechaDesde] = useState(obtenerFechaLima());
+  const [fechaHasta, setFechaHasta] = useState(obtenerFechaLima());
+  const [errorRango, setErrorRango] = useState('');
+  const [ventasTotales, setVentasTotales] = useState(0);
+  
 
   useEffect(() => {
     const token = localStorage.getItem('dlidia_token');
@@ -68,7 +88,13 @@ export default function PanelAdministrativo() {
     const cargarHistorial = async () => {
       try {
         const token = localStorage.getItem('dlidia_token');
-        const res = await fetch(`${API_URL}/api/pedidos`, {
+        if (fechaDesde > fechaHasta) {
+          setErrorRango('La fecha inicial no puede ser posterior a la fecha final.');
+          setPedidos([]);
+          return;
+        }
+        setErrorRango('');
+        const res = await fetch(`${API_URL}/api/pedidos?desde=${fechaDesde}&hasta=${fechaHasta}`, {
           cache: 'no-store',
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -128,6 +154,49 @@ export default function PanelAdministrativo() {
       socket.off('nuevo_pedido');
       socket.off('estado_actualizado');
       socket.disconnect();
+    };
+  }, [fechaDesde, fechaHasta]);
+
+  useEffect(() => {
+    let activo = true;
+
+    const cargarCajaDelDia = async () => {
+      const token = localStorage.getItem('dlidia_token');
+
+      if (!token) return;
+
+      try {
+        const res = await fetch(
+          `${API_URL}/api/pedidos/caja/resumen-diario`,
+          {
+            cache: 'no-store',
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          }
+        );
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'No se pudo cargar la caja del día');
+        }
+
+        if (activo) {
+          setVentasTotales(Number(data.total) || 0);
+        }
+      } catch (error) {
+        console.error('Error al cargar la caja del día:', error);
+      }
+    };
+
+    cargarCajaDelDia();
+
+    const intervalo = window.setInterval(cargarCajaDelDia, 60_000);
+
+    return () => {
+      activo = false;
+      window.clearInterval(intervalo);
     };
   }, []);
 
@@ -235,9 +304,6 @@ export default function PanelAdministrativo() {
     );
   }
 
-  const ventasTotales = pedidos
-    .filter(p => p.estado === 'Entregado')
-    .reduce((sum, p) => sum + Number(p.total), 0);
 
   return (
     <div className="p-8 bg-gray-100 min-h-screen font-sans">
@@ -247,6 +313,34 @@ export default function PanelAdministrativo() {
         <div className="bg-green-600 text-white px-6 py-2 rounded shadow-lg text-xl font-bold">
           Caja del día: S/ {ventasTotales.toFixed(2)}
         </div>
+      </div>
+
+      <div className="mb-6 flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:flex-row sm:items-end">
+        <label className="flex flex-col gap-2 text-sm font-semibold text-gray-700">
+          Desde
+          <input
+            type="date"
+            value={fechaDesde}
+            max={fechaHasta}
+            onChange={(e) => setFechaDesde(e.target.value)}
+            className="rounded-lg border border-gray-300 px-3 py-2"
+          />
+        </label>
+
+        <label className="flex flex-col gap-2 text-sm font-semibold text-gray-700">
+          Hasta
+          <input
+            type="date"
+            value={fechaHasta}
+            min={fechaDesde}
+            onChange={(e) => setFechaHasta(e.target.value)}
+            className="rounded-lg border border-gray-300 px-3 py-2"
+          />
+        </label>
+
+        {errorRango && (
+          <p className="text-sm font-semibold text-red-600">{errorRango}</p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -270,6 +364,9 @@ export default function PanelAdministrativo() {
             </div>
 
             <p className="text-gray-600">Origen: {pedido.origen}</p>
+            <p className="text-gray-500 text-sm">
+              Creado: {formatearFechaPedido(pedido.fecha_creacion)}
+            </p>
             <p className="text-gray-600">Entrega: {pedido.tipo_entrega}</p>
             {pedido.detalles?.length > 0 && (
               <div className="mt-3 rounded-lg bg-gray-50 border border-gray-200 p-3">

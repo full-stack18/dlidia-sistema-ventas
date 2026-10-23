@@ -11,7 +11,8 @@ import {
     asignarMotorizado,
     obtenerPedidosPendientesDePago,
     registrarCierreCaja,
-    obtenerHistorialCierresCaja
+    obtenerHistorialCierresCaja,
+    obtenerResumenCajaDiaria
 } from '../controllers/pedidoController.js';
 import { verificarToken, autorizarRoles } from '../middleware/authMiddleware.js';
 import { registrarPago } from '../controllers/pagoController.js';
@@ -31,6 +32,7 @@ router.get('/caja/anulaciones', verificarToken, autorizarRoles('Cajero', 'Admini
 router.post('/caja/cierre', verificarToken, autorizarRoles('Cajero', 'Administradora'), registrarCierreCaja);
 router.get('/caja/cierres', verificarToken, autorizarRoles('Cajero', 'Administradora'), obtenerHistorialCierresCaja);
 router.get('/caja/pendientes-pago', verificarToken, autorizarRoles('Cajero', 'Administradora'), obtenerPedidosPendientesDePago);
+router.get('/caja/resumen-diario', verificarToken, autorizarRoles('Cajero', 'Administradora', 'Cocina'), obtenerResumenCajaDiaria);
 router.get('/delivery', verificarToken, autorizarRoles('Motorizado'), obtenerDelivery);
 router.get('/motorizados', verificarToken, autorizarRoles('Administradora'), obtenerMotorizados);
 router.put('/:id/asignar', verificarToken, autorizarRoles('Administradora'), asignarMotorizado);
