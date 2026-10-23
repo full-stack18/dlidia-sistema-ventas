@@ -7,6 +7,7 @@ import pool from './config/db.js';
 import pedidoRoutes from './routes/pedidoRoutes.js';
 import platoRoutes from './routes/platoRoutes.js';
 import authRoutes from './routes/authRoutes.js';
+import analiticaRoutes from './routes/analiticaRoutes.js';
 import jwt from 'jsonwebtoken';
 
 dotenv.config();
@@ -49,6 +50,7 @@ app.use((req, res, next) => {
 app.use('/api/pedidos', pedidoRoutes);
 app.use('/api/platos', platoRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/analitica', analiticaRoutes);
 
 
 // Endpoint de prueba para verificar la conexión a la base de datos

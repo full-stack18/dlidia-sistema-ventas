@@ -51,6 +51,13 @@ export default function AdminNav() {
             🍔 Mantenimiento de Carta
           </Link>
         )}
+          <Link
+            href="/analitica"
+            className="flex items-center gap-2 font-bold transition hover:text-red-400"
+          >
+            📊 Análisis
+          </Link>
+        
 
         {/* Enlace para el Motorizado */}
         {rol === 'Motorizado' && (
