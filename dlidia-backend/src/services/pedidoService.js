@@ -5,6 +5,7 @@ import {
     validarCambioEstado
 } from '../utils/pedidoStateMachine.js';
 
+//OBSERVER
 const emitirEstadoPedido = (io, pedido) => {
     // Avisar al personal de Cocina y Administración.
     io.to('role:Cocina')
@@ -64,7 +65,8 @@ export const procesarNuevoPedido = async (datosPedido, io) => {
         nombreCliente: nombreCliente.trim(),
         telefonoCliente: telefonoCliente?.trim() || null,
         direccionEntrega: tipoEntrega === 'Delivery' ? direccionEntrega.trim() : null,
-        items: itemsNormalizados
+        items: itemsNormalizados,
+        consentimientoDatos: datosPedido.consentimientoDatos === true
     });
 
     io.to('role:Cocina')
@@ -141,7 +143,7 @@ export const cambiarEstadoPedido = async (id, nuevoEstado, io, usuarioRol, usuar
             throw err;
         }
     }
-
+    //STATE
     validarCambioEstado({
         estadoActual: pedidoActual.estado,
         nuevoEstado,

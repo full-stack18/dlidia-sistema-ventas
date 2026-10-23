@@ -111,7 +111,9 @@ export default function PanelAdministrativo() {
       cargarMotorizados();
     }
 
+
     socket.connect();
+    //OBSERVER
     socket.on('nuevo_pedido', (pedidoNuevo) => {
       setPedidos((prev) => [pedidoNuevo, ...prev]);
     });

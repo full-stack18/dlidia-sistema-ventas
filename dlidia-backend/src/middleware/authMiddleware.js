@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 export const verificarToken = (req, res, next) => {
-    // 1. Extraer el token de la cabecera de la petición
+    // . Extraer el token de la cabecera de la petición
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Formato esperado: "Bearer <token>"
 
@@ -14,11 +14,11 @@ export const verificarToken = (req, res, next) => {
     }
 
     try {
-        // 2. Verificar que el token sea auténtico y no haya expirado
+        // . Verificar que el token sea auténtico y no haya expirado
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         req.usuario = decoded;
         
-        // 4. Dar permiso para continuar hacia la ruta solicitada
+        // . Dar permiso para continuar hacia la ruta solicitada
         next();
     } catch (error) {
         return res.status(401).json({ error: 'Token inválido o expirado' });

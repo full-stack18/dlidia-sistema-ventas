@@ -31,6 +31,15 @@ const obtenerPedidoCompletoConCliente = async (db, id) => {
     return result.rows[0];
 };
 
+const normalizarTelefono = (telefono) => {
+    const digitos = telefono?.replace(/\D/g, '') ?? '';
+
+    // Guarda celulares peruanos con un único formato, tengan o no el prefijo 51.
+    return digitos.startsWith('51') && digitos.length === 11
+        ? digitos.slice(2)
+        : digitos;
+};
+
 export const guardarPedidoConDetalles = async ({
     usuarioId,
     origen,
@@ -38,12 +47,55 @@ export const guardarPedidoConDetalles = async ({
     nombreCliente,
     telefonoCliente,
     direccionEntrega,
+    consentimientoDatos,
     items
 }) => {
     const client = await pool.connect();
 
     try {
         await client.query('BEGIN');
+
+        let clienteId = null;
+        const telefonoNormalizado = normalizarTelefono(telefonoCliente);
+
+        if (consentimientoDatos === true && telefonoNormalizado) {
+            const clienteResult = await client.query(`
+                INSERT INTO clientes (
+                    nombre,
+                    telefono,
+                    telefono_normalizado,
+                    consentimiento_datos,
+                    consentimiento_fecha
+                )
+                VALUES ($1, $2, $3, TRUE, NOW())
+                ON CONFLICT (telefono_normalizado)
+                DO UPDATE SET
+                    nombre = EXCLUDED.nombre,
+                    telefono = EXCLUDED.telefono,
+                    consentimiento_datos = TRUE,
+                    consentimiento_fecha = NOW()
+                RETURNING id;
+            `, [
+                nombreCliente,
+                telefonoCliente,
+                telefonoNormalizado
+            ]);
+
+            clienteId = clienteResult.rows[0].id;
+
+            if (direccionEntrega?.trim()) {
+                await client.query(`
+                    INSERT INTO direcciones_clientes (cliente_id, direccion)
+                    SELECT $1, $2
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM direcciones_clientes
+                        WHERE cliente_id = $1
+                        AND LOWER(BTRIM(direccion)) = LOWER(BTRIM($2))
+                    );
+                `, [clienteId, direccionEntrega.trim()]);
+            }
+        }
 
         const ids = items.map((item) => item.platoId);
         const platosResult = await client.query(`
@@ -94,9 +146,10 @@ export const guardarPedidoConDetalles = async ({
                 total,
                 nombre_cliente,
                 telefono_cliente,
-                direccion_entrega
+                direccion_entrega,
+                cliente_id
             )
-            VALUES ($1, 'Pendiente', $2, $3, $4, $5, $6, $7)
+            VALUES ($1, 'Pendiente', $2, $3, $4, $5, $6, $7, $8)
             RETURNING id;
         `, [
             usuarioId || null,
@@ -105,7 +158,8 @@ export const guardarPedidoConDetalles = async ({
             total,
             nombreCliente,
             telefonoCliente || null,
-            direccionEntrega || null
+            direccionEntrega || null,
+            clienteId
         ]);
 
         const pedidoId = pedidoResult.rows[0].id;

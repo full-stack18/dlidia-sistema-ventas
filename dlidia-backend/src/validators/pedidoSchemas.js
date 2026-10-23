@@ -27,7 +27,8 @@ export const crearPedidoSchema = z.object({
             observaciones: z.string().trim().max(500).optional().nullable()
         })
     ).min(1, 'El pedido debe incluir al menos un producto')
-     .max(50, 'El pedido no puede incluir más de 50 productos')
+     .max(50, 'El pedido no puede incluir más de 50 productos'),
+     consentimientoDatos: z.boolean().optional()
 }).superRefine((pedido, contexto) => {
     if (pedido.tipoEntrega === 'Delivery') {
         const telefono = pedido.telefonoCliente

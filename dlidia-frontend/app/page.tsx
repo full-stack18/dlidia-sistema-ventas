@@ -28,6 +28,7 @@ export default function PortalCliente() {
   const [nombreCliente, setNombreCliente] = useState('');
   const [telefonoCliente, setTelefonoCliente] = useState('');
   const [direccionEntrega, setDireccionEntrega] = useState('');
+  const [consentimientoDatos, setConsentimientoDatos] = useState(false);
 
   useEffect(() => {
     const cargarCarta = async () => {
@@ -73,6 +74,8 @@ export default function PortalCliente() {
         body: JSON.stringify({
           tipoEntrega,
           nombreCliente,
+          consentimientoDatos:
+          tipoEntrega === 'Delivery' && consentimientoDatos,
           telefonoCliente,
           direccionEntrega: tipoEntrega === 'Delivery' ? direccionEntrega : null,
           items: carrito.map((item) => ({
@@ -89,6 +92,7 @@ export default function PortalCliente() {
         setNombreCliente('');
         setTelefonoCliente('');
         setDireccionEntrega('');
+        setConsentimientoDatos(false);
         router.push(`/seguimiento/${data.pedido.id}`);
       } else {
         const data = await res.json();
@@ -298,6 +302,18 @@ export default function PortalCliente() {
                       className="w-full border-2 border-gray-300 rounded-lg text-[#1a1210] font-bold bg-white p-2.5 placeholder-gray-400 focus:border-[#7A1010] focus:outline-none"
                     />
                   </div>
+                  <label className="col-span-2 flex items-start gap-2 text-xs text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={consentimientoDatos}
+                      onChange={(e) => setConsentimientoDatos(e.target.checked)}
+                      className="mt-0.5 accent-[#7A1010]"
+                    />
+                    <span>
+                      Acepto que D'Lidia guarde mi nombre, celular y dirección para agilizar
+                      futuros pedidos. Esta autorización es opcional.
+                    </span>
+                  </label>
                 </div>
               )}
             </div>
