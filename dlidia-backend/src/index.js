@@ -9,6 +9,7 @@ import platoRoutes from './routes/platoRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import analiticaRoutes from './routes/analiticaRoutes.js';
 import jwt from 'jsonwebtoken';
+import clienteRoutes from './routes/clienteRoutes.js';
 
 dotenv.config();
 
@@ -51,6 +52,7 @@ app.use('/api/pedidos', pedidoRoutes);
 app.use('/api/platos', platoRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/analitica', analiticaRoutes);
+app.use('/api/clientes', clienteRoutes);
 
 
 // Endpoint de prueba para verificar la conexión a la base de datos
