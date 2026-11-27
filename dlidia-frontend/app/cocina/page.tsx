@@ -31,6 +31,14 @@ interface DetallePedido {
   observaciones?: string | null;
 }
 
+interface HistorialEstadoPedido {
+  id: number;
+  estado_anterior: string | null;
+  estado_nuevo: string;
+  fecha_cambio: string;
+  usuario: string;
+}
+
 const obtenerFechaLima = (fecha: Date = new Date()) =>
   new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Lima',
@@ -45,7 +53,9 @@ const obtenerFechaLima = (fecha: Date = new Date()) =>
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
-    hour12: false
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit'
   }).format(new Date(fecha));
 
 export default function PanelAdministrativo() {
@@ -58,7 +68,10 @@ export default function PanelAdministrativo() {
   const [fechaHasta, setFechaHasta] = useState(obtenerFechaLima());
   const [errorRango, setErrorRango] = useState('');
   const [ventasTotales, setVentasTotales] = useState(0);
-  
+  const [historialPedidoAbierto, setHistorialPedidoAbierto] = useState<number | null>(null);
+  const [historialPedido, setHistorialPedido] = useState<HistorialEstadoPedido[]>([]);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
+  const [errorHistorial, setErrorHistorial] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('dlidia_token');
@@ -225,6 +238,60 @@ export default function PanelAdministrativo() {
       );
     } catch (error) {
       alert('Error de conexión al actualizar el estado.');
+    }
+  };
+
+  const abrirHistorialPedido = async (pedidoId: number) => {
+    if (historialPedidoAbierto === pedidoId) {
+      setHistorialPedidoAbierto(null);
+      setHistorialPedido([]);
+      setErrorHistorial('');
+      return;
+    }
+
+    setHistorialPedidoAbierto(pedidoId);
+    setHistorialPedido([]);
+    setErrorHistorial('');
+    setCargandoHistorial(true);
+
+    const token = localStorage.getItem('dlidia_token');
+
+    if (!token) {
+      setErrorHistorial('Tu sesión expiró. Inicia sesión nuevamente.');
+      setCargandoHistorial(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/pedidos/${pedidoId}/historial`,
+        {
+          cache: 'no-store',
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'No se pudo cargar el historial.');
+      }
+
+      if (!Array.isArray(data)) {
+        throw new Error('La API devolvió un historial con formato inesperado.');
+      }
+
+      setHistorialPedido(data);
+    } catch (error) {
+      setErrorHistorial(
+        error instanceof Error
+          ? error.message
+          : 'Ocurrió un error al cargar el historial.'
+      );
+    } finally {
+      setCargandoHistorial(false);
     }
   };
 
@@ -469,6 +536,56 @@ export default function PanelAdministrativo() {
               </button>
             )}
             </div>
+
+            <button
+  type="button"
+  aria-expanded={historialPedidoAbierto === pedido.id}
+  onClick={() => abrirHistorialPedido(pedido.id)}
+  className="mt-3 w-full rounded-lg border border-gray-300 bg-white py-2 font-semibold text-gray-700 hover:bg-gray-50"
+>
+  {historialPedidoAbierto === pedido.id
+    ? 'Ocultar historial'
+    : 'Ver historial del pedido'}
+</button>
+
+{historialPedidoAbierto === pedido.id && (
+  <section
+    aria-label={`Historial del pedido ${pedido.id}`}
+    className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-4"
+  >
+    <h3 className="mb-3 font-bold text-gray-800">
+      Trazabilidad del pedido
+    </h3>
+
+    {cargandoHistorial ? (
+      <p className="text-sm text-gray-600">Cargando historial...</p>
+    ) : errorHistorial ? (
+      <p role="alert" className="text-sm font-medium text-red-600">
+        {errorHistorial}
+      </p>
+    ) : historialPedido.length === 0 ? (
+      <p className="text-sm text-gray-600">
+        El pedido aún no tiene cambios de estado registrados.
+      </p>
+    ) : (
+      <ol className="space-y-3">
+        {historialPedido.map((evento) => (
+          <li
+            key={evento.id}
+            className="border-l-2 border-[#7A1010] pl-3"
+          >
+            <p className="font-semibold text-gray-800">
+              {evento.estado_anterior ?? 'Creado'} → {evento.estado_nuevo}
+            </p>
+            <p className="text-sm text-gray-600">
+              {formatearFechaPedido(evento.fecha_cambio)} · Responsable: {evento.usuario}
+            </p>
+          </li>
+        ))}
+      </ol>
+    )}
+  </section>
+)}
 
               {esAdministradora &&
               !['Entregado', 'Cancelado'].includes(pedido.estado) && (

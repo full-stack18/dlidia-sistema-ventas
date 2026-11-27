@@ -230,3 +230,16 @@ export const obtenerResumenCajaDiaria = async (req, res, next) => {
         next(error);
     }
 };
+
+export const obtenerHistorialEstadosPedido = async (req, res, next) => {
+    try {
+        const historial = await pedidoService.consultarHistorialEstadosPedido(
+            req.params.id,
+            req.usuario.rol
+        );
+
+        return res.status(200).json(historial);
+    } catch (error) {
+        next(error);
+    }
+};

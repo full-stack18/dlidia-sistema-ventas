@@ -229,7 +229,12 @@ export const cambiarEstadoPedido = async (id, nuevoEstado, io, usuarioRol, usuar
         tipoEntrega: pedidoActual.tipo_entrega
     });
 
-    const pedidoActualizado = await pedidoRepository.actualizarEstado(id, nuevoEstado, usuarioId);
+    const pedidoActualizado = await pedidoRepository.actualizarEstado(
+        id,
+        nuevoEstado,
+        usuarioId,
+        pedidoActual.estado
+    );
     emitirEstadoPedido(io, pedidoActualizado);
     return pedidoActualizado;
 };
@@ -287,6 +292,37 @@ export const listarPedidosPendientesDePago = async (usuarioRol) => {
 
 export const obtenerEstadoPedido = async (id) => {
     return await pedidoRepository.obtenerEstadoPorId(id);
+};
+
+export const consultarHistorialEstadosPedido = async (
+    pedidoId,
+    usuarioRol
+) => {
+    if (!['Administradora', 'Cajero', 'Cocina'].includes(usuarioRol)) {
+        const error = new Error(
+            'No tienes permisos para consultar el historial del pedido'
+        );
+        error.status = 403;
+        throw error;
+    }
+
+    const id = Number(pedidoId);
+
+    if (!Number.isSafeInteger(id) || id <= 0) {
+        const error = new Error('El identificador del pedido no es válido');
+        error.status = 400;
+        throw error;
+    }
+
+    const pedido = await pedidoRepository.obtenerPedidoPorId(id);
+
+    if (!pedido) {
+        const error = new Error('Pedido no encontrado');
+        error.status = 404;
+        throw error;
+    }
+
+    return pedidoRepository.obtenerHistorialEstadosPedido(id);
 };
 
 export const listarMotorizados = async (usuarioRol) => {
