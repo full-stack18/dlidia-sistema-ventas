@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { API_URL } from '@/lib/api';
+import { apiFetch } from '@/lib/apiClient';
 
 interface Plato {
   id: number;
@@ -33,8 +33,7 @@ export default function PortalCliente() {
   useEffect(() => {
     const cargarCarta = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/platos`);
-        const data = await res.json();
+        const data = await apiFetch<Plato[]>('/api/platos');
         setMenu(data);
       } catch (error) {
         console.error("Error al cargar la carta:", error);
@@ -67,15 +66,16 @@ export default function PortalCliente() {
     }
 
     setEnviando(true);
+
     try {
-      const res = await fetch(`${API_URL}/api/pedidos`, {
+      const data = await apiFetch<{ pedido: { id: number } }>('/api/pedidos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tipoEntrega,
           nombreCliente,
           consentimientoDatos:
-          tipoEntrega === 'Delivery' && consentimientoDatos,
+            tipoEntrega === 'Delivery' && consentimientoDatos,
           telefonoCliente,
           direccionEntrega: tipoEntrega === 'Delivery' ? direccionEntrega : null,
           items: carrito.map((item) => ({
@@ -86,20 +86,14 @@ export default function PortalCliente() {
         })
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        setCarrito([]);
-        setNombreCliente('');
-        setTelefonoCliente('');
-        setDireccionEntrega('');
-        setConsentimientoDatos(false);
-        router.push(`/seguimiento/${data.pedido.id}`);
-      } else {
-        const data = await res.json();
-        alert(data.error || 'Hubo un error al procesar tu pedido.');
-      }
+      setCarrito([]);
+      setNombreCliente('');
+      setTelefonoCliente('');
+      setDireccionEntrega('');
+      setConsentimientoDatos(false);
+      router.push(`/seguimiento/${data.pedido.id}`);
     } catch (error) {
-      alert('Error de conexión.');
+      alert(error instanceof Error ? error.message : 'Error de conexión.');
     } finally {
       setEnviando(false);
     }
