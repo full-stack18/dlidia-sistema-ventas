@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { API_URL } from '@/lib/api';
+import { apiFetch } from '@/lib/apiClient';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -14,26 +14,30 @@ export default function Login() {
     setError('');
 
     try {
-      const res = await fetch(`${API_URL}/api/auth/login`, {
+      const data = await apiFetch<{
+        token: string;
+        usuario: { rol: string };
+      }>('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
 
-      const data = await res.json();
+      localStorage.setItem('dlidia_token', data.token);
 
-      if (res.ok) {
-        localStorage.setItem('dlidia_token', data.token);
-        if (data.usuario.rol === 'Motorizado') {
-          router.push('/motorizado');
-        } else {
-          router.push('/cocina');
-        }
+      if (data.usuario.rol === 'Motorizado') {
+        router.push('/motorizado');
       } else {
-        setError(data.error || 'Credenciales incorrectas');
+        router.push('/cocina');
       }
     } catch (err) {
-      setError('Error al conectar con el servidor');
+      const mensaje = err instanceof Error ? err.message : '';
+
+      setError(
+        mensaje.includes('HTTP 401')
+          ? 'Credenciales incorrectas'
+          : mensaje || 'Error al conectar con el servidor'
+      );
     }
   };
 
