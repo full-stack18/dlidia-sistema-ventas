@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import AdminNav from '../../components/AdminNav';
 import * as jwtDecodeModule from 'jwt-decode';
-import { API_URL } from '@/lib/api';
+import { apiFetch } from '@/lib/apiClient';
 
 interface Venta {
   id: number;
@@ -114,18 +114,26 @@ export default function CuadreCaja() {
 
   const cargarCaja = async () => {
     setCargando(true);
-    const token = localStorage.getItem('dlidia_token');
+
     try {
-      const res = await fetch(`${API_URL}/api/pedidos/caja?desde=${fechaDesde}&hasta=${fechaHasta}`,{
-        headers: { 'Authorization': `Bearer ${token}` }
+      const params = new URLSearchParams({
+        desde: fechaDesde,
+        hasta: fechaHasta
       });
-      const data = await res.json();
-      if (res.ok) {
-        setVentas(data.ventas);
-        setTotal(data.total);
+
+      const data = await apiFetch<{
+        ventas: Venta[];
+        total: number;
+      }>(`/api/pedidos/caja?${params.toString()}`);
+
+      if (!Array.isArray(data.ventas)) {
+        throw new Error('La API devolvió una lista de ventas inválida.');
       }
+
+      setVentas(data.ventas);
+      setTotal(Number(data.total) || 0);
     } catch (error) {
-      console.error("Error al cargar la caja:", error);
+      console.error('Error al cargar la caja:', error);
     } finally {
       setCargando(false);
     }
@@ -134,20 +142,14 @@ export default function CuadreCaja() {
 
   const cargarPedidosPendientes = async () => {
     setCargandoPendientes(true);
-    const token = localStorage.getItem('dlidia_token');
 
     try {
-      const res = await fetch(
-        `${API_URL}/api/pedidos/caja/pendientes-pago`,
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
+      const data = await apiFetch<PedidoPendiente[]>(
+        '/api/pedidos/caja/pendientes-pago'
       );
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'No se pudieron cargar los pedidos pendientes');
+      if (!Array.isArray(data)) {
+        throw new Error('La API devolvió una lista de pedidos pendientes inválida.');
       }
 
       setPedidosPendientes(data);
@@ -171,16 +173,12 @@ export default function CuadreCaja() {
     }
 
     try {
-      const res = await fetch(`${API_URL}/api/pedidos/caja/cierres`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      const data = await apiFetch<CierreCaja[]>(
+        '/api/pedidos/caja/cierres'
+      );
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'No se pudo cargar el historial de cierres');
+      if (!Array.isArray(data)) {
+        throw new Error('La API devolvió un historial de cierres inválido.');
       }
 
       const decoded: any = (jwtDecodeModule as any).jwtDecode(token);
@@ -215,135 +213,113 @@ export default function CuadreCaja() {
   };
 
   const cargarAnulaciones = async () => {
-  setCargandoAnulaciones(true);
-  setErrorAnulaciones('');
+    setCargandoAnulaciones(true);
+    setErrorAnulaciones('');
 
-  const token = localStorage.getItem('dlidia_token');
+    try {
+      const params = new URLSearchParams({
+        desde: fechaDesde,
+        hasta: fechaHasta
+      });
 
-  if (!token) {
-    setErrorAnulaciones('Tu sesión expiró. Inicia sesión nuevamente.');
-    setCargandoAnulaciones(false);
-    return;
-  }
+      const data = await apiFetch<AnulacionCaja[]>(
+        `/api/pedidos/caja/anulaciones?${params.toString()}`
+      );
 
-  try {
-    const res = await fetch(
-      `${API_URL}/api/pedidos/caja/anulaciones?desde=${fechaDesde}&hasta=${fechaHasta}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+      if (!Array.isArray(data)) {
+        throw new Error('La API devolvió una lista de anulaciones inválida.');
       }
-    );
 
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.error || 'No se pudieron cargar las anulaciones');
+      setAnulaciones(data);
+    } catch (error) {
+      setErrorAnulaciones(
+        error instanceof Error
+          ? error.message
+          : 'Ocurrió un error al cargar las anulaciones.'
+      );
+    } finally {
+      setCargandoAnulaciones(false);
     }
-
-    setAnulaciones(data);
-  } catch (error) {
-    setErrorAnulaciones(
-      error instanceof Error
-        ? error.message
-        : 'Ocurrió un error al cargar las anulaciones'
-    );
-  } finally {
-    setCargandoAnulaciones(false);
-  }
-};
+  };
 
   const registrarPago = async (pedidoId: number) => {
-  const token = localStorage.getItem('dlidia_token');
+    const metodoPago = metodosSeleccionados[pedidoId] || 'Efectivo';
 
-  if (!token) {
-    alert('Tu sesión expiró. Inicia sesión nuevamente.');
-    return;
-  }
+    setPedidoCobrando(pedidoId);
 
-  const metodoPago = metodosSeleccionados[pedidoId] || 'Efectivo';
+    try {
+      await apiFetch<unknown>(`/api/pedidos/${pedidoId}/pagos`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ metodoPago })
+      });
 
-  setPedidoCobrando(pedidoId);
+      await cargarPedidosPendientes();
+      await cargarCaja();
 
-  try {
-    const res = await fetch(`${API_URL}/api/pedidos/${pedidoId}/pagos`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ metodoPago })
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.error || 'No se pudo registrar el pago');
+      alert('Pago registrado correctamente.');
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Ocurrió un error al registrar el pago.'
+      );
+    } finally {
+      setPedidoCobrando(null);
     }
-
-    await cargarPedidosPendientes();
-    await cargarCaja();
-
-    alert('Pago registrado correctamente.');
-  } catch (error) {
-    alert(
-      error instanceof Error
-        ? error.message
-        : 'Ocurrió un error al registrar el pago'
-    );
-  } finally {
-    setPedidoCobrando(null);
-  }
-};
+  };
   
 const registrarCierre = async () => {
-  const token = localStorage.getItem('dlidia_token');
-
-  if (!token) {
-    alert('Tu sesión expiró. Inicia sesión nuevamente.');
-    return;
-  }
-
-  if (fechaDesde !== obtenerFechaLocal() || fechaHasta !== obtenerFechaLocal()) {
-    alert('Solo puedes registrar el cierre cuando Desde y Hasta corresponden al día actual.');
-    return;
-  }
-
-  if (montoContado.trim() === '' || !Number.isFinite(Number(montoContado)) || Number(montoContado) < 0) {
-    alert('Ingresa un monto contado válido, mayor o igual a cero.');
-    return;
-  }
-
-  setCerrandoCaja(true);
-
-  try {
-    const res = await fetch(`${API_URL}/api/pedidos/caja/cierre`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        montoContado: Number(montoContado),
-        observacion: observacionCierre
-      })
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.error || 'No se pudo registrar el cierre de caja');
+    if (
+      fechaDesde !== obtenerFechaLocal() ||
+      fechaHasta !== obtenerFechaLocal()
+    ) {
+      alert(
+        'Solo puedes registrar el cierre cuando Desde y Hasta corresponden al día actual.'
+      );
+      return;
     }
 
-    setCierreRegistrado(data.cierre);
-    alert('Cierre de caja registrado correctamente.');
-  } catch (error) {
-    alert(error instanceof Error ? error.message : 'Ocurrió un error al cerrar la caja');
-  } finally {
-    setCerrandoCaja(false);
-  }
-};
+    if (
+      montoContado.trim() === '' ||
+      !Number.isFinite(Number(montoContado)) ||
+      Number(montoContado) < 0
+    ) {
+      alert('Ingresa un monto contado válido, mayor o igual a cero.');
+      return;
+    }
+
+    setCerrandoCaja(true);
+
+    try {
+      const data = await apiFetch<{ cierre: CierreCaja }>(
+        '/api/pedidos/caja/cierre',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            montoContado: Number(montoContado),
+            observacion: observacionCierre
+          })
+        }
+      );
+
+      setCierreRegistrado(data.cierre);
+      alert('Cierre de caja registrado correctamente.');
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Ocurrió un error al cerrar la caja.'
+      );
+    } finally {
+      setCerrandoCaja(false);
+    }
+  };
 
   if (!autorizado) {
     return <div className="p-8 text-center text-red-600 font-bold">Acceso Denegado. Solo personal de Caja.</div>;
