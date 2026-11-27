@@ -12,7 +12,8 @@ import {
     obtenerPedidosPendientesDePago,
     registrarCierreCaja,
     obtenerHistorialCierresCaja,
-    obtenerResumenCajaDiaria
+    obtenerResumenCajaDiaria,
+    obtenerHistorialEstadosPedido
 } from '../controllers/pedidoController.js';
 import { verificarToken, autorizarRoles } from '../middleware/authMiddleware.js';
 import { registrarPago } from '../controllers/pagoController.js';
@@ -38,4 +39,10 @@ router.get('/motorizados', verificarToken, autorizarRoles('Administradora'), obt
 router.put('/:id/asignar', verificarToken, autorizarRoles('Administradora'), asignarMotorizado);
 router.put('/:id', verificarToken, validarEsquema(actualizarEstadoPedidoSchema), actualizarEstado);
 router.post('/:id/pagos', verificarToken, autorizarRoles('Cajero', 'Administradora'), registrarPago);
+router.get(
+    '/:id/historial',
+    verificarToken,
+    autorizarRoles('Administradora', 'Cajero', 'Cocina'),
+    obtenerHistorialEstadosPedido
+);
 export default router;

@@ -123,7 +123,13 @@ const fechaISOValida = (fecha) => {
     );
 };
 
-export const listarPedidos = async (usuarioRol, desde, hasta) => {
+export const listarPedidos = async (
+    usuarioRol,
+    desde,
+    hasta,
+    pagina,
+    limite
+) => {
     if (!['Cajero', 'Administradora', 'Cocina'].includes(usuarioRol)) {
         const error = new Error(
             'No tienes permisos para consultar todos los pedidos'
@@ -143,27 +149,60 @@ export const listarPedidos = async (usuarioRol, desde, hasta) => {
         throw error;
     }
 
-    if (!tieneDesde) {
-        return await pedidoRepository.obtenerTodosLosPedidos();
+    if (tieneDesde) {
+        if (!fechaISOValida(desde) || !fechaISOValida(hasta)) {
+            const error = new Error(
+                'Las fechas deben tener el formato AAAA-MM-DD'
+            );
+            error.status = 400;
+            throw error;
+        }
+
+        if (desde > hasta) {
+            const error = new Error(
+                'La fecha inicial no puede ser posterior a la fecha final'
+            );
+            error.status = 400;
+            throw error;
+        }
     }
 
-    if (!fechaISOValida(desde) || !fechaISOValida(hasta)) {
-        const error = new Error(
-            'Las fechas deben ser válidas y tener el formato AAAA-MM-DD'
+    // Conserva la respuesta actual para las pantallas existentes.
+    const solicitaPaginacion =
+        pagina !== undefined || limite !== undefined;
+
+    if (!solicitaPaginacion) {
+        return pedidoRepository.obtenerTodosLosPedidos(
+            tieneDesde ? desde : undefined,
+            tieneHasta ? hasta : undefined
         );
+    }
+
+    const paginaNumero = pagina === undefined ? 1 : Number(pagina);
+    const limiteNumero = limite === undefined ? 20 : Number(limite);
+
+    if (!Number.isSafeInteger(paginaNumero) || paginaNumero < 1) {
+        const error = new Error('La página debe ser un entero mayor que cero');
         error.status = 400;
         throw error;
     }
 
-    if (desde > hasta) {
-        const error = new Error(
-            'La fecha inicial no puede ser posterior a la fecha final'
-        );
+    if (
+        !Number.isSafeInteger(limiteNumero) ||
+        limiteNumero < 1 ||
+        limiteNumero > 100
+    ) {
+        const error = new Error('El límite debe estar entre 1 y 100');
         error.status = 400;
         throw error;
     }
 
-    return await pedidoRepository.obtenerTodosLosPedidos(desde, hasta);
+    return pedidoRepository.obtenerPedidosPaginados(
+        tieneDesde ? desde : undefined,
+        tieneHasta ? hasta : undefined,
+        paginaNumero,
+        limiteNumero
+    );
 };
 
 export const cambiarEstadoPedido = async (id, nuevoEstado, io, usuarioRol, usuarioId) => {
@@ -229,7 +268,12 @@ export const cambiarEstadoPedido = async (id, nuevoEstado, io, usuarioRol, usuar
         tipoEntrega: pedidoActual.tipo_entrega
     });
 
-    const pedidoActualizado = await pedidoRepository.actualizarEstado(id, nuevoEstado, usuarioId);
+    const pedidoActualizado = await pedidoRepository.actualizarEstado(
+        id,
+        nuevoEstado,
+        usuarioId,
+        pedidoActual.estado
+    );
     emitirEstadoPedido(io, pedidoActualizado);
     return pedidoActualizado;
 };
@@ -287,6 +331,37 @@ export const listarPedidosPendientesDePago = async (usuarioRol) => {
 
 export const obtenerEstadoPedido = async (id) => {
     return await pedidoRepository.obtenerEstadoPorId(id);
+};
+
+export const consultarHistorialEstadosPedido = async (
+    pedidoId,
+    usuarioRol
+) => {
+    if (!['Administradora', 'Cajero', 'Cocina'].includes(usuarioRol)) {
+        const error = new Error(
+            'No tienes permisos para consultar el historial del pedido'
+        );
+        error.status = 403;
+        throw error;
+    }
+
+    const id = Number(pedidoId);
+
+    if (!Number.isSafeInteger(id) || id <= 0) {
+        const error = new Error('El identificador del pedido no es válido');
+        error.status = 400;
+        throw error;
+    }
+
+    const pedido = await pedidoRepository.obtenerPedidoPorId(id);
+
+    if (!pedido) {
+        const error = new Error('Pedido no encontrado');
+        error.status = 404;
+        throw error;
+    }
+
+    return pedidoRepository.obtenerHistorialEstadosPedido(id);
 };
 
 export const listarMotorizados = async (usuarioRol) => {

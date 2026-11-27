@@ -3,33 +3,15 @@ import * as jwtDecodeModule from 'jwt-decode';
 import { useEffect, useState } from 'react';
 import { socket } from '../../lib/socket';
 import AdminNav from '../../components/AdminNav';
-import { API_URL } from '@/lib/api';
+import PaginacionPedidos from '../../components/PaginacionPedidos';
+import type {
+  HistorialEstadoPedido,
+  Motorizado,
+  Pedido
+} from '../../types/pedido';
+import PedidoCard from '../../components/PedidoCard';
+import { apiFetch } from '@/lib/apiClient';
 
-interface Pedido {
-  id: number;
-  origen: string;
-  tipo_entrega: string;
-  total: number;
-  estado: string;
-  detalles: DetallePedido[];
-  motorizado_id?: number | null;
-  fecha_creacion: string;
-}
-
-interface Motorizado {
-  id: number;
-  username: string;
-}
-
-interface DetallePedido {
-  id: number;
-  plato_id: number;
-  nombre: string;
-  cantidad: number;
-  precio_unitario: number;
-  subtotal: number;
-  observaciones?: string | null;
-}
 
 const obtenerFechaLima = (fecha: Date = new Date()) =>
   new Intl.DateTimeFormat('en-CA', {
@@ -45,11 +27,20 @@ const obtenerFechaLima = (fecha: Date = new Date()) =>
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
-    hour12: false
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit'
   }).format(new Date(fecha));
 
 export default function PanelAdministrativo() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [pagina, setPagina] = useState(1);
+  const [totalPedidos, setTotalPedidos] = useState(0);
+  const LIMITE_POR_PAGINA = 20;
+  const totalPaginas = Math.max(
+    1,
+    Math.ceil(totalPedidos / LIMITE_POR_PAGINA)
+  );
   const [autorizado, setAutorizado] = useState(true);
   const [motorizados, setMotorizados] = useState<Motorizado[]>([]);
   const [esAdministradora, setEsAdministradora] = useState(false);
@@ -58,7 +49,10 @@ export default function PanelAdministrativo() {
   const [fechaHasta, setFechaHasta] = useState(obtenerFechaLima());
   const [errorRango, setErrorRango] = useState('');
   const [ventasTotales, setVentasTotales] = useState(0);
-  
+  const [historialPedidoAbierto, setHistorialPedidoAbierto] = useState<number | null>(null);
+  const [historialPedido, setHistorialPedido] = useState<HistorialEstadoPedido[]>([]);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
+  const [errorHistorial, setErrorHistorial] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('dlidia_token');
@@ -87,28 +81,41 @@ export default function PanelAdministrativo() {
 
     const cargarHistorial = async () => {
       try {
-        const token = localStorage.getItem('dlidia_token');
         if (fechaDesde > fechaHasta) {
-          setErrorRango('La fecha inicial no puede ser posterior a la fecha final.');
+          setErrorRango(
+            'La fecha inicial no puede ser posterior a la fecha final.'
+          );
           setPedidos([]);
+          setTotalPedidos(0);
           return;
         }
-        setErrorRango('');
-        const res = await fetch(`${API_URL}/api/pedidos?desde=${fechaDesde}&hasta=${fechaHasta}`, {
-          cache: 'no-store',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await res.json();
 
-        if (Array.isArray(data)) {
-          setPedidos(data);
-        } else {
-          console.error("El backend devolvió un error en lugar de un arreglo:", data);
-          setPedidos([]);
+        setErrorRango('');
+
+        const params = new URLSearchParams({
+          desde: fechaDesde,
+          hasta: fechaHasta,
+          pagina: String(pagina),
+          limite: String(LIMITE_POR_PAGINA)
+        });
+
+        const data = await apiFetch<{
+          items: Pedido[];
+          total: number;
+        }>(`/api/pedidos?${params.toString()}`);
+
+        if (!Array.isArray(data.items)) {
+          throw new Error(
+            'La API devolvió una lista de pedidos con formato inesperado.'
+          );
         }
+
+        setPedidos(data.items);
+        setTotalPedidos(Number(data.total) || 0);
       } catch (error) {
-        console.error("Error de conexión al cargar historial:", error);
+        console.error('Error al cargar el historial de pedidos:', error);
         setPedidos([]);
+        setTotalPedidos(0);
       }
     };
     cargarHistorial();
@@ -116,19 +123,15 @@ export default function PanelAdministrativo() {
     if (esAdmin) {
       const cargarMotorizados = async () => {
         try {
-          const res = await fetch(`${API_URL}/api/pedidos/motorizados`, {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          });
+          const data = await apiFetch<Motorizado[]>(
+            '/api/pedidos/motorizados'
+          );
 
-          const data = await res.json();
-
-          if (res.ok && Array.isArray(data)) {
-            setMotorizados(data);
-          } else {
-            console.error('No se pudieron cargar los motorizados:', data);
+          if (!Array.isArray(data)) {
+            throw new Error('La API devolvió una lista de motorizados inválida.');
           }
+
+          setMotorizados(data);
         } catch (error) {
           console.error('Error al cargar motorizados:', error);
         }
@@ -137,50 +140,52 @@ export default function PanelAdministrativo() {
       cargarMotorizados();
     }
 
+  }, [fechaDesde, fechaHasta, pagina]);
 
-    socket.connect();
-    //OBSERVER
-    socket.on('nuevo_pedido', (pedidoNuevo) => {
-      setPedidos((prev) => [pedidoNuevo, ...prev]);
-    });
+  useEffect(() => {
+  const token = localStorage.getItem('dlidia_token');
+  if (!token) return;
 
-    socket.on('estado_actualizado', (pedidoActualizado) => {
-      setPedidos((prev) =>
-        prev.map(p => p.id === pedidoActualizado.id ? pedidoActualizado : p)
-      );
-    });
+  try {
+    const decoded: any = (jwtDecodeModule as any).jwtDecode(token);
 
-    return () => {
-      socket.off('nuevo_pedido');
-      socket.off('estado_actualizado');
-      socket.disconnect();
-    };
-  }, [fechaDesde, fechaHasta]);
+    if (!['Administradora', 'Cajero', 'Cocina'].includes(decoded.rol)) {
+      return;
+    }
+  } catch {
+    return;
+  }
+
+  socket.connect();
+
+  // Observer: reacciona a eventos emitidos por el servidor.
+  socket.on('nuevo_pedido', (pedidoNuevo) => {
+    setPedidos((prev) => [pedidoNuevo, ...prev]);
+  });
+
+  socket.on('estado_actualizado', (pedidoActualizado) => {
+    setPedidos((prev) =>
+      prev.map((pedido) =>
+        pedido.id === pedidoActualizado.id ? pedidoActualizado : pedido
+      )
+    );
+  });
+
+  return () => {
+    socket.off('nuevo_pedido');
+    socket.off('estado_actualizado');
+    socket.disconnect();
+  };
+}, []);
 
   useEffect(() => {
     let activo = true;
 
     const cargarCajaDelDia = async () => {
-      const token = localStorage.getItem('dlidia_token');
-
-      if (!token) return;
-
       try {
-        const res = await fetch(
-          `${API_URL}/api/pedidos/caja/resumen-diario`,
-          {
-            cache: 'no-store',
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          }
+        const data = await apiFetch<{ total: number }>(
+          '/api/pedidos/caja/resumen-diario'
         );
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || 'No se pudo cargar la caja del día');
-        }
 
         if (activo) {
           setVentasTotales(Number(data.total) || 0);
@@ -201,30 +206,58 @@ export default function PanelAdministrativo() {
   }, []);
 
   const cambiarEstado = async (id: number, nuevoEstado: string) => {
-    const token = localStorage.getItem('dlidia_token');
-
     try {
-      const res = await fetch(`${API_URL}/api/pedidos/${id}`, {
+      const data = await apiFetch<Pedido>(`/api/pedidos/${id}`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({ estado: nuevoEstado })
       });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        alert(data.error || 'No se pudo actualizar el estado del pedido.');
-        return;
-      }
 
       setPedidos((actuales) =>
         actuales.map((pedido) => (pedido.id === id ? data : pedido))
       );
     } catch (error) {
-      alert('Error de conexión al actualizar el estado.');
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Error de conexión al actualizar el estado.'
+      );
+    }
+  };
+
+  const abrirHistorialPedido = async (pedidoId: number) => {
+    if (historialPedidoAbierto === pedidoId) {
+      setHistorialPedidoAbierto(null);
+      setHistorialPedido([]);
+      setErrorHistorial('');
+      return;
+    }
+
+    setHistorialPedidoAbierto(pedidoId);
+    setHistorialPedido([]);
+    setErrorHistorial('');
+    setCargandoHistorial(true);
+
+    try {
+      const data = await apiFetch<HistorialEstadoPedido[]>(
+        `/api/pedidos/${pedidoId}/historial`
+      );
+
+      if (!Array.isArray(data)) {
+        throw new Error('La API devolvió un historial con formato inesperado.');
+      }
+
+      setHistorialPedido(data);
+    } catch (error) {
+      setErrorHistorial(
+        error instanceof Error
+          ? error.message
+          : 'Ocurrió un error al cargar el historial.'
+      );
+    } finally {
+      setCargandoHistorial(false);
     }
   };
 
@@ -246,31 +279,19 @@ export default function PanelAdministrativo() {
       return;
     }
 
-    const token = localStorage.getItem('dlidia_token');
-
-    if (!token) {
-      alert('Tu sesión expiró. Vuelve a iniciar sesión.');
-      return;
-    }
-
     try {
-      const res = await fetch(`${API_URL}/api/pedidos/${pedidoId}/asignar`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          motorizadoId: Number(motorizadoId)
-        })
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        alert(data.error || 'No se pudo asignar el motorizado.');
-        return;
-      }
+      const data = await apiFetch<Pedido>(
+        `/api/pedidos/${pedidoId}/asignar`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            motorizadoId: Number(motorizadoId)
+          })
+        }
+      );
 
       setPedidos((actuales) =>
         actuales.map((pedido) =>
@@ -283,7 +304,11 @@ export default function PanelAdministrativo() {
         [pedidoId]: ''
       }));
     } catch (error) {
-      alert('Error de conexión al asignar el motorizado.');
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Error de conexión al asignar el motorizado.'
+      );
     }
   };
 
@@ -345,145 +370,36 @@ export default function PanelAdministrativo() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {pedidos.map((pedido) => (
-          <div
+          <PedidoCard
             key={pedido.id}
-            className={`p-4 rounded shadow-md border-l-4 bg-white text-gray-800
-              ${pedido.estado === 'Pendiente' ? 'border-red-500' :
-                pedido.estado === 'En Preparación' ? 'border-yellow-500' :
-                pedido.estado === 'Listo' ? 'border-blue-500' :
-                pedido.estado === 'Asignado' ? 'border-purple-500' :
-                pedido.estado === 'Recogido' ? 'border-indigo-500' :
-                pedido.estado === 'En camino' ? 'border-cyan-500' :
-                pedido.estado === 'Cancelado' ? 'border-red-700' :
-                'border-green-600'}`}
-          >
-
-            <div className="flex justify-between border-b pb-2 mb-2">
-              <h2 className="text-xl font-bold text-gray-900">Pedido #{pedido.id}</h2>
-              <span className="font-bold text-gray-700">{pedido.estado}</span>
-            </div>
-
-            <p className="text-gray-600">Origen: {pedido.origen}</p>
-            <p className="text-gray-500 text-sm">
-              Creado: {formatearFechaPedido(pedido.fecha_creacion)}
-            </p>
-            <p className="text-gray-600">Entrega: {pedido.tipo_entrega}</p>
-            {pedido.detalles?.length > 0 && (
-              <div className="mt-3 rounded-lg bg-gray-50 border border-gray-200 p-3">
-                <p className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Productos</p>
-                <ul className="space-y-2">
-                  {pedido.detalles.map((detalle) => (
-                    <li
-                      key={detalle.id}
-                      className="flex justify-between gap-3 text-sm"
-                      >
-                      <div>
-                        <p className="font-semibold text-gray-800">
-                          {detalle.cantidad}x {detalle.nombre}
-                        </p>
-
-                        {detalle.observaciones && (
-                          <p className="mt-1 text-xs text-gray-600">
-                            Observación: {detalle.observaciones}
-                          </p>
-                        )}
-                      </div>
-
-                      <span className="font-bold text-gray-600">
-                        S/ {Number(detalle.subtotal).toFixed(2)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            <p className="font-bold text-green-600 mt-2 text-lg">Total: S/ {Number(pedido.total).toFixed(2)}</p>
-
-            <div className="mt-4 flex gap-2">
-              {pedido.estado === 'Pendiente' && (
-                <button
-                  onClick={() => cambiarEstado(pedido.id, 'En Preparación')}
-                  className="w-full bg-yellow-500 text-white py-2 rounded hover:bg-yellow-600 font-bold"
-                >
-                  Preparar
-                </button>
-              )}
-
-              {pedido.estado === 'En Preparación' && (
-                <button
-                  onClick={() => cambiarEstado(pedido.id, 'Listo')}
-                  className="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 font-bold"
-                >
-                  Marcar como listo
-                </button>
-              )}
-
-              {pedido.estado === 'Listo' &&
-              pedido.tipo_entrega === 'Delivery' &&
-              esAdministradora && (
-                <div className="w-full flex flex-col sm:flex-row gap-2">
-                  <select
-                    value={motorizadoSeleccionado[pedido.id] ?? ''}
-                    onChange={(event) =>
-                      setMotorizadoSeleccionado((actual) => ({
-                        ...actual,
-                        [pedido.id]: event.target.value
-                      }))
-                    }
-                    className="flex-1 border border-gray-300 rounded px-3 py-2 bg-white text-gray-800"
-                  >
-                    <option value="">Selecciona un motorizado</option>
-
-                    {motorizados.map((motorizado) => (
-                      <option key={motorizado.id} value={motorizado.id}>
-                        {motorizado.username}
-                      </option>
-                    ))}
-                  </select>
-
-                  <button
-                    onClick={() => asignarMotorizado(pedido.id)}
-                    disabled={!motorizadoSeleccionado[pedido.id]}
-                    className="bg-blue-600 text-white px-4 py-2 rounded font-bold disabled:opacity-50"
-                  >
-                    Asignar
-                  </button>
-                </div>
-              )}
-
-            {pedido.estado === 'Listo' &&
-              pedido.tipo_entrega === 'Delivery' &&
-              !esAdministradora && (
-                <p className="w-full text-center text-blue-600 font-bold py-2 bg-blue-50 rounded">
-                  🛵 Pedido listo; esperando asignación de motorizado
-                </p>
-            )}
-
-            {pedido.estado === 'Listo' &&
-            pedido.tipo_entrega !== 'Delivery' && (
-              <button
-                onClick={() => cambiarEstado(pedido.id, 'Entregado')}
-                className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 font-bold"
-              >
-                Marcar como entregado
-              </button>
-            )}
-            </div>
-
-              {esAdministradora &&
-              !['Entregado', 'Cancelado'].includes(pedido.estado) && (
-                <button
-                  type="button"
-                  onClick={() => anularPedido(pedido.id)}
-                  className="mt-3 w-full rounded-lg bg-red-600 py-2 font-bold text-white hover:bg-red-700"
-                >
-                  Anular pedido
-                </button>
-              )}
-
-          </div>
+            pedido={pedido}
+            esAdministradora={esAdministradora}
+            motorizados={motorizados}
+            motorizadoSeleccionado={motorizadoSeleccionado[pedido.id]}
+            historialAbierto={historialPedidoAbierto === pedido.id}
+            historial={historialPedido}
+            cargandoHistorial={cargandoHistorial}
+            errorHistorial={errorHistorial}
+            formatearFecha={formatearFechaPedido}
+            onCambiarEstado={cambiarEstado}
+            onSeleccionarMotorizado={(pedidoId, motorizadoId) =>
+              setMotorizadoSeleccionado((actual) => ({
+                ...actual,
+                [pedidoId]: motorizadoId
+              }))
+            }
+            onAsignarMotorizado={asignarMotorizado}
+            onAbrirHistorial={abrirHistorialPedido}
+            onAnularPedido={anularPedido}
+          />
         ))}
       </div>
+      <PaginacionPedidos
+        pagina={pagina}
+        totalPaginas={totalPaginas}
+        totalPedidos={totalPedidos}
+        onCambiarPagina={setPagina}
+      />
     </div>
   );
 }

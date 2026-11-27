@@ -108,6 +108,19 @@ export default function PortalCliente() {
   const categoriasUnicas = ['Todos', ...Array.from(new Set(menu.map(p => p.categoria)))];
   const menuFiltrado = categoriaActiva === 'Todos' ? menu : menu.filter(p => p.categoria === categoriaActiva);
 
+  const iconoCategoria = (categoria: string) => {
+    const nombre = categoria.toLowerCase();
+
+    if (nombre === 'todos') return '🍽️';
+    if (nombre.includes('bebida')) return '🥤';
+    if (nombre.includes('chifa')) return '🍚';
+    if (nombre.includes('combo')) return '🍱';
+    if (nombre.includes('parrilla')) return '🥩';
+    if (nombre.includes('poll')) return '🍗';
+
+    return '🍴';
+  };
+
   return (
     <div className="bg-[#f8f5f2] min-h-screen pb-12">
       <nav className="bg-[#1a1210] text-[#f8f5f2] p-4 flex justify-between items-center shadow-lg border-b-4 border-[#7A1010]">
@@ -119,7 +132,7 @@ export default function PortalCliente() {
         </div>
         <div className="hidden md:flex gap-6 font-semibold text-sm">
            <a href="/" className="hover:text-[#DCA11D] transition-colors">Inicio</a>
-           <a href="#" className="hover:text-[#DCA11D] transition-colors">Menú</a>
+           <a href="#catalogo" className="hover:text-[#DCA11D] transition-colors">Menú</a>
            <a href="#" className="hover:text-[#DCA11D] transition-colors">Promociones</a>
            <a href="/ubicacion" className="flex items-center gap-1 text-[#DCA11D] hover:text-white transition-colors">
               📍 Cómo llegar
@@ -147,7 +160,7 @@ export default function PortalCliente() {
               className={`shrink-0 px-6 py-3 rounded-xl font-bold shadow-md transition-all flex flex-col items-center gap-2 min-w-24
                 ${categoriaActiva === cat ? 'bg-[#7A1010] text-white scale-105 border-b-4 border-[#DCA11D]' : 'bg-white text-gray-800 hover:bg-gray-50 border-b-4 border-transparent'}`}
             >
-              <span className="text-2xl">{cat === 'Todos' ? '🍽️' : cat === 'Chifa' ? '🍚' : cat === 'Pollería' ? '🍗' : '🥤'}</span>
+              <span className="text-2xl">{iconoCategoria(cat)}</span>
               <span className="text-sm tracking-wide">{cat}</span>
             </button>
           ))}
@@ -156,7 +169,7 @@ export default function PortalCliente() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col lg:flex-row gap-8">
 
-        <div className="flex-1">
+        <div id="catalogo" className="flex-1 scroll-mt-6">
           <h2 className="text-2xl font-bold text-[#1a1210] mb-6 flex items-center gap-2">
             <span className="text-[#DCA11D]">🔖</span> Nuestro Catálogo
           </h2>

@@ -163,6 +163,16 @@ export const guardarPedidoConDetalles = async ({
         ]);
 
         const pedidoId = pedidoResult.rows[0].id;
+        await client.query(
+            `INSERT INTO historial_estados_pedido (
+                pedido_id,
+                estado_anterior,
+                estado_nuevo,
+                usuario_id
+            )
+            VALUES ($1, NULL, 'Pendiente', $2);`,
+            [pedidoId, usuarioId ?? null]
+        );
         const parametros = [];
         const valores = detalles.map((detalle, indice) => {
             const base = indice * 6;
@@ -200,7 +210,7 @@ export const guardarPedidoConDetalles = async ({
     }
 };
 
-export const obtenerTodosLosPedidos = async (desde = null, hasta = null) => {
+const construirFiltroFechaPedidos = (desde = null, hasta = null) => {
     const condiciones = [];
     const parametros = [];
 
@@ -218,19 +228,66 @@ export const obtenerTodosLosPedidos = async (desde = null, hasta = null) => {
         );
     }
 
-    const filtroFecha = condiciones.length > 0
-        ? `WHERE ${condiciones.join(' AND ')}`
-        : '';
+    return {
+        filtroFecha: condiciones.length
+            ? `WHERE ${condiciones.join(' AND ')}`
+            : '',
+        parametros
+    };
+};
+
+export const obtenerTodosLosPedidos = async (desde = null, hasta = null) => {
+    const { filtroFecha, parametros } =
+        construirFiltroFechaPedidos(desde, hasta);
 
     const query = `
         ${consultaPedidosConDetalles}
         ${filtroFecha}
         GROUP BY p.id
-        ORDER BY p.fecha_creacion DESC;
+        ORDER BY p.fecha_creacion DESC, p.id DESC;
     `;
 
     const result = await pool.query(query, parametros);
     return result.rows;
+};
+
+export const obtenerPedidosPaginados = async (
+    desde,
+    hasta,
+    pagina,
+    limite
+) => {
+    const { filtroFecha, parametros } =
+        construirFiltroFechaPedidos(desde, hasta);
+
+    const indiceLimite = parametros.length + 1;
+    const indiceOffset = parametros.length + 2;
+    const offset = (pagina - 1) * limite;
+
+    const query = `
+        ${consultaPedidosConDetalles}
+        ${filtroFecha}
+        GROUP BY p.id
+        ORDER BY p.fecha_creacion DESC, p.id DESC
+        LIMIT $${indiceLimite}
+        OFFSET $${indiceOffset};
+    `;
+
+    const countQuery = `
+        SELECT COUNT(*)::int AS total
+        FROM pedidos p
+        ${filtroFecha};
+    `;
+
+    const [pedidosResult, totalResult] = await Promise.all([
+        pool.query(query, [...parametros, limite, offset]),
+        pool.query(countQuery, parametros)
+    ]);
+
+    return {
+        items: pedidosResult.rows,
+        total: Number(totalResult.rows[0]?.total ?? 0)
+    };
 };
 
 export const obtenerPedidosDelivery = async (motorizadoId) => {
@@ -365,6 +422,115 @@ export const obtenerEstadoPorId = async (id) => {
     `;
     const result = await pool.query(query, [id]);
     return result.rows[0];
+};
+
+export const actualizarEstado = async (
+    id,
+    nuevoEstado,
+    usuarioId,
+    estadoEsperado
+) => {
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        const pedidoResult = await client.query(
+            `SELECT id, estado
+             FROM pedidos
+             WHERE id = $1
+             FOR UPDATE;`,
+            [id]
+        );
+
+        const pedidoActual = pedidoResult.rows[0];
+
+        if (!pedidoActual) {
+            const error = new Error('Pedido no encontrado');
+            error.status = 404;
+            throw error;
+        }
+
+        // Evita aplicar una transición basada en un estado que ya cambió.
+        if (pedidoActual.estado !== estadoEsperado) {
+            const error = new Error(
+                'El pedido cambió mientras se procesaba. Actualiza la vista e inténtalo otra vez.'
+            );
+            error.status = 409;
+            throw error;
+        }
+
+        // La comprobación se repite dentro del bloqueo para evitar
+        // anular un pedido que se pagó en una operación concurrente.
+        if (nuevoEstado === 'Cancelado') {
+            const pagoResult = await client.query(
+                `SELECT 1
+                 FROM pagos
+                 WHERE pedido_id = $1
+                   AND estado = 'Confirmado'
+                 LIMIT 1;`,
+                [id]
+            );
+
+            if (pagoResult.rowCount > 0) {
+                const error = new Error(
+                    'No se puede anular un pedido que ya tiene un pago confirmado'
+                );
+                error.status = 409;
+                throw error;
+            }
+        }
+
+        await client.query(
+            `UPDATE pedidos
+             SET estado = $1
+             WHERE id = $2;`,
+            [nuevoEstado, id]
+        );
+
+        await client.query(
+            `INSERT INTO historial_estados_pedido (
+                pedido_id,
+                estado_anterior,
+                estado_nuevo,
+                usuario_id
+            )
+            VALUES ($1, $2, $3, $4);`,
+            [id, pedidoActual.estado, nuevoEstado, usuarioId ?? null]
+        );
+
+        const pedidoActualizado = await obtenerPedidoCompletoConCliente(
+            client,
+            id
+        );
+
+        await client.query('COMMIT');
+        return pedidoActualizado;
+    } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+    } finally {
+        client.release();
+    }
+};
+
+export const obtenerHistorialEstadosPedido = async (pedidoId) => {
+    const result = await pool.query(
+        `SELECT
+            h.id,
+            h.pedido_id,
+            h.estado_anterior,
+            h.estado_nuevo,
+            h.fecha_cambio,
+            COALESCE(u.username, 'Sistema') AS usuario
+         FROM historial_estados_pedido h
+         LEFT JOIN usuarios u ON u.id = h.usuario_id
+         WHERE h.pedido_id = $1
+         ORDER BY h.fecha_cambio ASC, h.id ASC;`,
+        [pedidoId]
+    );
+
+    return result.rows;
 };
 
 export const listarMotorizados = async () => {

@@ -18,8 +18,11 @@ export const obtenerPedidos = async (req, res, next) => {
         const pedidos = await pedidoService.listarPedidos(
             req.usuario.rol,
             req.query.desde,
-            req.query.hasta
+            req.query.hasta,
+            req.query.pagina,
+            req.query.limite
         );
+
         return res.status(200).json(pedidos);
     } catch (error) {
         next(error);
@@ -226,6 +229,19 @@ export const obtenerResumenCajaDiaria = async (req, res, next) => {
         }).format(new Date());
 
         return res.status(200).json({ fecha, total });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const obtenerHistorialEstadosPedido = async (req, res, next) => {
+    try {
+        const historial = await pedidoService.consultarHistorialEstadosPedido(
+            req.params.id,
+            req.usuario.rol
+        );
+
+        return res.status(200).json(historial);
     } catch (error) {
         next(error);
     }
