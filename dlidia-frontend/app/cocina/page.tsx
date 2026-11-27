@@ -4,13 +4,13 @@ import { useEffect, useState } from 'react';
 import { socket } from '../../lib/socket';
 import AdminNav from '../../components/AdminNav';
 import PaginacionPedidos from '../../components/PaginacionPedidos';
-import { API_URL } from '@/lib/api';
 import type {
   HistorialEstadoPedido,
   Motorizado,
   Pedido
 } from '../../types/pedido';
 import PedidoCard from '../../components/PedidoCard';
+import { apiFetch } from '@/lib/apiClient';
 
 
 const obtenerFechaLima = (fecha: Date = new Date()) =>
@@ -81,34 +81,41 @@ export default function PanelAdministrativo() {
 
     const cargarHistorial = async () => {
       try {
-        const token = localStorage.getItem('dlidia_token');
         if (fechaDesde > fechaHasta) {
-          setErrorRango('La fecha inicial no puede ser posterior a la fecha final.');
-          setPedidos([]);
-          return;
-        }
-        setErrorRango('');
-        const res = await fetch(
-          `${API_URL}/api/pedidos?desde=${fechaDesde}&hasta=${fechaHasta}&pagina=${pagina}&limite=${LIMITE_POR_PAGINA}`,
-          {
-            cache: 'no-store',
-            headers: { Authorization: `Bearer ${token}` }
-          }
-        );
-        const data = await res.json();
-
-        if (!res.ok || !Array.isArray(data.items)) {
-          console.error('No se pudo cargar la página de pedidos:', data);
+          setErrorRango(
+            'La fecha inicial no puede ser posterior a la fecha final.'
+          );
           setPedidos([]);
           setTotalPedidos(0);
           return;
         }
 
+        setErrorRango('');
+
+        const params = new URLSearchParams({
+          desde: fechaDesde,
+          hasta: fechaHasta,
+          pagina: String(pagina),
+          limite: String(LIMITE_POR_PAGINA)
+        });
+
+        const data = await apiFetch<{
+          items: Pedido[];
+          total: number;
+        }>(`/api/pedidos?${params.toString()}`);
+
+        if (!Array.isArray(data.items)) {
+          throw new Error(
+            'La API devolvió una lista de pedidos con formato inesperado.'
+          );
+        }
+
         setPedidos(data.items);
-        setTotalPedidos(Number(data.total) || 0);         
+        setTotalPedidos(Number(data.total) || 0);
       } catch (error) {
-        console.error("Error de conexión al cargar historial:", error);
+        console.error('Error al cargar el historial de pedidos:', error);
         setPedidos([]);
+        setTotalPedidos(0);
       }
     };
     cargarHistorial();
@@ -116,19 +123,15 @@ export default function PanelAdministrativo() {
     if (esAdmin) {
       const cargarMotorizados = async () => {
         try {
-          const res = await fetch(`${API_URL}/api/pedidos/motorizados`, {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          });
+          const data = await apiFetch<Motorizado[]>(
+            '/api/pedidos/motorizados'
+          );
 
-          const data = await res.json();
-
-          if (res.ok && Array.isArray(data)) {
-            setMotorizados(data);
-          } else {
-            console.error('No se pudieron cargar los motorizados:', data);
+          if (!Array.isArray(data)) {
+            throw new Error('La API devolvió una lista de motorizados inválida.');
           }
+
+          setMotorizados(data);
         } catch (error) {
           console.error('Error al cargar motorizados:', error);
         }
@@ -179,26 +182,10 @@ export default function PanelAdministrativo() {
     let activo = true;
 
     const cargarCajaDelDia = async () => {
-      const token = localStorage.getItem('dlidia_token');
-
-      if (!token) return;
-
       try {
-        const res = await fetch(
-          `${API_URL}/api/pedidos/caja/resumen-diario`,
-          {
-            cache: 'no-store',
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          }
+        const data = await apiFetch<{ total: number }>(
+          '/api/pedidos/caja/resumen-diario'
         );
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || 'No se pudo cargar la caja del día');
-        }
 
         if (activo) {
           setVentasTotales(Number(data.total) || 0);
@@ -219,30 +206,24 @@ export default function PanelAdministrativo() {
   }, []);
 
   const cambiarEstado = async (id: number, nuevoEstado: string) => {
-    const token = localStorage.getItem('dlidia_token');
-
     try {
-      const res = await fetch(`${API_URL}/api/pedidos/${id}`, {
+      const data = await apiFetch<Pedido>(`/api/pedidos/${id}`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({ estado: nuevoEstado })
       });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        alert(data.error || 'No se pudo actualizar el estado del pedido.');
-        return;
-      }
 
       setPedidos((actuales) =>
         actuales.map((pedido) => (pedido.id === id ? data : pedido))
       );
     } catch (error) {
-      alert('Error de conexión al actualizar el estado.');
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Error de conexión al actualizar el estado.'
+      );
     }
   };
 
@@ -259,30 +240,10 @@ export default function PanelAdministrativo() {
     setErrorHistorial('');
     setCargandoHistorial(true);
 
-    const token = localStorage.getItem('dlidia_token');
-
-    if (!token) {
-      setErrorHistorial('Tu sesión expiró. Inicia sesión nuevamente.');
-      setCargandoHistorial(false);
-      return;
-    }
-
     try {
-      const res = await fetch(
-        `${API_URL}/api/pedidos/${pedidoId}/historial`,
-        {
-          cache: 'no-store',
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
+      const data = await apiFetch<HistorialEstadoPedido[]>(
+        `/api/pedidos/${pedidoId}/historial`
       );
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'No se pudo cargar el historial.');
-      }
 
       if (!Array.isArray(data)) {
         throw new Error('La API devolvió un historial con formato inesperado.');
@@ -318,31 +279,19 @@ export default function PanelAdministrativo() {
       return;
     }
 
-    const token = localStorage.getItem('dlidia_token');
-
-    if (!token) {
-      alert('Tu sesión expiró. Vuelve a iniciar sesión.');
-      return;
-    }
-
     try {
-      const res = await fetch(`${API_URL}/api/pedidos/${pedidoId}/asignar`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          motorizadoId: Number(motorizadoId)
-        })
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        alert(data.error || 'No se pudo asignar el motorizado.');
-        return;
-      }
+      const data = await apiFetch<Pedido>(
+        `/api/pedidos/${pedidoId}/asignar`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            motorizadoId: Number(motorizadoId)
+          })
+        }
+      );
 
       setPedidos((actuales) =>
         actuales.map((pedido) =>
@@ -355,7 +304,11 @@ export default function PanelAdministrativo() {
         [pedidoId]: ''
       }));
     } catch (error) {
-      alert('Error de conexión al asignar el motorizado.');
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Error de conexión al asignar el motorizado.'
+      );
     }
   };
 
