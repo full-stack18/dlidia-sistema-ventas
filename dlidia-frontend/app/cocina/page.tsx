@@ -60,6 +60,13 @@ const obtenerFechaLima = (fecha: Date = new Date()) =>
 
 export default function PanelAdministrativo() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [pagina, setPagina] = useState(1);
+  const [totalPedidos, setTotalPedidos] = useState(0);
+  const LIMITE_POR_PAGINA = 20;
+  const totalPaginas = Math.max(
+    1,
+    Math.ceil(totalPedidos / LIMITE_POR_PAGINA)
+  );
   const [autorizado, setAutorizado] = useState(true);
   const [motorizados, setMotorizados] = useState<Motorizado[]>([]);
   const [esAdministradora, setEsAdministradora] = useState(false);
@@ -107,18 +114,24 @@ export default function PanelAdministrativo() {
           return;
         }
         setErrorRango('');
-        const res = await fetch(`${API_URL}/api/pedidos?desde=${fechaDesde}&hasta=${fechaHasta}`, {
-          cache: 'no-store',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await fetch(
+          `${API_URL}/api/pedidos?desde=${fechaDesde}&hasta=${fechaHasta}&pagina=${pagina}&limite=${LIMITE_POR_PAGINA}`,
+          {
+            cache: 'no-store',
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
         const data = await res.json();
 
-        if (Array.isArray(data)) {
-          setPedidos(data);
-        } else {
-          console.error("El backend devolvió un error en lugar de un arreglo:", data);
+        if (!res.ok || !Array.isArray(data.items)) {
+          console.error('No se pudo cargar la página de pedidos:', data);
           setPedidos([]);
+          setTotalPedidos(0);
+          return;
         }
+
+        setPedidos(data.items);
+        setTotalPedidos(Number(data.total) || 0);         
       } catch (error) {
         console.error("Error de conexión al cargar historial:", error);
         setPedidos([]);
@@ -150,25 +163,43 @@ export default function PanelAdministrativo() {
       cargarMotorizados();
     }
 
+  }, [fechaDesde, fechaHasta, pagina]);
 
-    socket.connect();
-    //OBSERVER
-    socket.on('nuevo_pedido', (pedidoNuevo) => {
-      setPedidos((prev) => [pedidoNuevo, ...prev]);
-    });
+  useEffect(() => {
+  const token = localStorage.getItem('dlidia_token');
+  if (!token) return;
 
-    socket.on('estado_actualizado', (pedidoActualizado) => {
-      setPedidos((prev) =>
-        prev.map(p => p.id === pedidoActualizado.id ? pedidoActualizado : p)
-      );
-    });
+  try {
+    const decoded: any = (jwtDecodeModule as any).jwtDecode(token);
 
-    return () => {
-      socket.off('nuevo_pedido');
-      socket.off('estado_actualizado');
-      socket.disconnect();
-    };
-  }, [fechaDesde, fechaHasta]);
+    if (!['Administradora', 'Cajero', 'Cocina'].includes(decoded.rol)) {
+      return;
+    }
+  } catch {
+    return;
+  }
+
+  socket.connect();
+
+  // Observer: reacciona a eventos emitidos por el servidor.
+  socket.on('nuevo_pedido', (pedidoNuevo) => {
+    setPedidos((prev) => [pedidoNuevo, ...prev]);
+  });
+
+  socket.on('estado_actualizado', (pedidoActualizado) => {
+    setPedidos((prev) =>
+      prev.map((pedido) =>
+        pedido.id === pedidoActualizado.id ? pedidoActualizado : pedido
+      )
+    );
+  });
+
+  return () => {
+    socket.off('nuevo_pedido');
+    socket.off('estado_actualizado');
+    socket.disconnect();
+  };
+}, []);
 
   useEffect(() => {
     let activo = true;
@@ -601,6 +632,31 @@ export default function PanelAdministrativo() {
           </div>
         ))}
       </div>
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-4">
+  <button
+    type="button"
+    onClick={() => setPagina((actual) => Math.max(1, actual - 1))}
+    disabled={pagina <= 1}
+    className="rounded-lg bg-gray-800 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+  >
+    Anterior
+  </button>
+
+  <span className="text-sm text-gray-700">
+    Página {pagina} de {totalPaginas} · {totalPedidos} pedidos
+  </span>
+
+  <button
+    type="button"
+    onClick={() =>
+      setPagina((actual) => Math.min(totalPaginas, actual + 1))
+    }
+    disabled={pagina >= totalPaginas || totalPedidos === 0}
+    className="rounded-lg bg-gray-800 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+  >
+    Siguiente
+  </button>
+</div>
     </div>
   );
 }

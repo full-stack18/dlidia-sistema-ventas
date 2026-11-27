@@ -210,7 +210,7 @@ export const guardarPedidoConDetalles = async ({
     }
 };
 
-export const obtenerTodosLosPedidos = async (desde = null, hasta = null) => {
+const construirFiltroFechaPedidos = (desde = null, hasta = null) => {
     const condiciones = [];
     const parametros = [];
 
@@ -228,19 +228,66 @@ export const obtenerTodosLosPedidos = async (desde = null, hasta = null) => {
         );
     }
 
-    const filtroFecha = condiciones.length > 0
-        ? `WHERE ${condiciones.join(' AND ')}`
-        : '';
+    return {
+        filtroFecha: condiciones.length
+            ? `WHERE ${condiciones.join(' AND ')}`
+            : '',
+        parametros
+    };
+};
+
+export const obtenerTodosLosPedidos = async (desde = null, hasta = null) => {
+    const { filtroFecha, parametros } =
+        construirFiltroFechaPedidos(desde, hasta);
 
     const query = `
         ${consultaPedidosConDetalles}
         ${filtroFecha}
         GROUP BY p.id
-        ORDER BY p.fecha_creacion DESC;
+        ORDER BY p.fecha_creacion DESC, p.id DESC;
     `;
 
     const result = await pool.query(query, parametros);
     return result.rows;
+};
+
+export const obtenerPedidosPaginados = async (
+    desde,
+    hasta,
+    pagina,
+    limite
+) => {
+    const { filtroFecha, parametros } =
+        construirFiltroFechaPedidos(desde, hasta);
+
+    const indiceLimite = parametros.length + 1;
+    const indiceOffset = parametros.length + 2;
+    const offset = (pagina - 1) * limite;
+
+    const query = `
+        ${consultaPedidosConDetalles}
+        ${filtroFecha}
+        GROUP BY p.id
+        ORDER BY p.fecha_creacion DESC, p.id DESC
+        LIMIT $${indiceLimite}
+        OFFSET $${indiceOffset};
+    `;
+
+    const countQuery = `
+        SELECT COUNT(*)::int AS total
+        FROM pedidos p
+        ${filtroFecha};
+    `;
+
+    const [pedidosResult, totalResult] = await Promise.all([
+        pool.query(query, [...parametros, limite, offset]),
+        pool.query(countQuery, parametros)
+    ]);
+
+    return {
+        items: pedidosResult.rows,
+        total: Number(totalResult.rows[0]?.total ?? 0)
+    };
 };
 
 export const obtenerPedidosDelivery = async (motorizadoId) => {

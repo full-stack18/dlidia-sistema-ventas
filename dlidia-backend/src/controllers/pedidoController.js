@@ -18,8 +18,11 @@ export const obtenerPedidos = async (req, res, next) => {
         const pedidos = await pedidoService.listarPedidos(
             req.usuario.rol,
             req.query.desde,
-            req.query.hasta
+            req.query.hasta,
+            req.query.pagina,
+            req.query.limite
         );
+
         return res.status(200).json(pedidos);
     } catch (error) {
         next(error);
