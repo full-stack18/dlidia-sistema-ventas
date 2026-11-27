@@ -3,41 +3,15 @@ import * as jwtDecodeModule from 'jwt-decode';
 import { useEffect, useState } from 'react';
 import { socket } from '../../lib/socket';
 import AdminNav from '../../components/AdminNav';
+import PaginacionPedidos from '../../components/PaginacionPedidos';
 import { API_URL } from '@/lib/api';
+import type {
+  HistorialEstadoPedido,
+  Motorizado,
+  Pedido
+} from '../../types/pedido';
+import PedidoCard from '../../components/PedidoCard';
 
-interface Pedido {
-  id: number;
-  origen: string;
-  tipo_entrega: string;
-  total: number;
-  estado: string;
-  detalles: DetallePedido[];
-  motorizado_id?: number | null;
-  fecha_creacion: string;
-}
-
-interface Motorizado {
-  id: number;
-  username: string;
-}
-
-interface DetallePedido {
-  id: number;
-  plato_id: number;
-  nombre: string;
-  cantidad: number;
-  precio_unitario: number;
-  subtotal: number;
-  observaciones?: string | null;
-}
-
-interface HistorialEstadoPedido {
-  id: number;
-  estado_anterior: string | null;
-  estado_nuevo: string;
-  fecha_cambio: string;
-  usuario: string;
-}
 
 const obtenerFechaLima = (fecha: Date = new Date()) =>
   new Intl.DateTimeFormat('en-CA', {
@@ -443,220 +417,36 @@ export default function PanelAdministrativo() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {pedidos.map((pedido) => (
-          <div
+          <PedidoCard
             key={pedido.id}
-            className={`p-4 rounded shadow-md border-l-4 bg-white text-gray-800
-              ${pedido.estado === 'Pendiente' ? 'border-red-500' :
-                pedido.estado === 'En Preparación' ? 'border-yellow-500' :
-                pedido.estado === 'Listo' ? 'border-blue-500' :
-                pedido.estado === 'Asignado' ? 'border-purple-500' :
-                pedido.estado === 'Recogido' ? 'border-indigo-500' :
-                pedido.estado === 'En camino' ? 'border-cyan-500' :
-                pedido.estado === 'Cancelado' ? 'border-red-700' :
-                'border-green-600'}`}
-          >
-
-            <div className="flex justify-between border-b pb-2 mb-2">
-              <h2 className="text-xl font-bold text-gray-900">Pedido #{pedido.id}</h2>
-              <span className="font-bold text-gray-700">{pedido.estado}</span>
-            </div>
-
-            <p className="text-gray-600">Origen: {pedido.origen}</p>
-            <p className="text-gray-500 text-sm">
-              Creado: {formatearFechaPedido(pedido.fecha_creacion)}
-            </p>
-            <p className="text-gray-600">Entrega: {pedido.tipo_entrega}</p>
-            {pedido.detalles?.length > 0 && (
-              <div className="mt-3 rounded-lg bg-gray-50 border border-gray-200 p-3">
-                <p className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Productos</p>
-                <ul className="space-y-2">
-                  {pedido.detalles.map((detalle) => (
-                    <li
-                      key={detalle.id}
-                      className="flex justify-between gap-3 text-sm"
-                      >
-                      <div>
-                        <p className="font-semibold text-gray-800">
-                          {detalle.cantidad}x {detalle.nombre}
-                        </p>
-
-                        {detalle.observaciones && (
-                          <p className="mt-1 text-xs text-gray-600">
-                            Observación: {detalle.observaciones}
-                          </p>
-                        )}
-                      </div>
-
-                      <span className="font-bold text-gray-600">
-                        S/ {Number(detalle.subtotal).toFixed(2)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            <p className="font-bold text-green-600 mt-2 text-lg">Total: S/ {Number(pedido.total).toFixed(2)}</p>
-
-            <div className="mt-4 flex gap-2">
-              {pedido.estado === 'Pendiente' && (
-                <button
-                  onClick={() => cambiarEstado(pedido.id, 'En Preparación')}
-                  className="w-full bg-yellow-500 text-white py-2 rounded hover:bg-yellow-600 font-bold"
-                >
-                  Preparar
-                </button>
-              )}
-
-              {pedido.estado === 'En Preparación' && (
-                <button
-                  onClick={() => cambiarEstado(pedido.id, 'Listo')}
-                  className="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 font-bold"
-                >
-                  Marcar como listo
-                </button>
-              )}
-
-              {pedido.estado === 'Listo' &&
-              pedido.tipo_entrega === 'Delivery' &&
-              esAdministradora && (
-                <div className="w-full flex flex-col sm:flex-row gap-2">
-                  <select
-                    value={motorizadoSeleccionado[pedido.id] ?? ''}
-                    onChange={(event) =>
-                      setMotorizadoSeleccionado((actual) => ({
-                        ...actual,
-                        [pedido.id]: event.target.value
-                      }))
-                    }
-                    className="flex-1 border border-gray-300 rounded px-3 py-2 bg-white text-gray-800"
-                  >
-                    <option value="">Selecciona un motorizado</option>
-
-                    {motorizados.map((motorizado) => (
-                      <option key={motorizado.id} value={motorizado.id}>
-                        {motorizado.username}
-                      </option>
-                    ))}
-                  </select>
-
-                  <button
-                    onClick={() => asignarMotorizado(pedido.id)}
-                    disabled={!motorizadoSeleccionado[pedido.id]}
-                    className="bg-blue-600 text-white px-4 py-2 rounded font-bold disabled:opacity-50"
-                  >
-                    Asignar
-                  </button>
-                </div>
-              )}
-
-            {pedido.estado === 'Listo' &&
-              pedido.tipo_entrega === 'Delivery' &&
-              !esAdministradora && (
-                <p className="w-full text-center text-blue-600 font-bold py-2 bg-blue-50 rounded">
-                  🛵 Pedido listo; esperando asignación de motorizado
-                </p>
-            )}
-
-            {pedido.estado === 'Listo' &&
-            pedido.tipo_entrega !== 'Delivery' && (
-              <button
-                onClick={() => cambiarEstado(pedido.id, 'Entregado')}
-                className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 font-bold"
-              >
-                Marcar como entregado
-              </button>
-            )}
-            </div>
-
-            <button
-  type="button"
-  aria-expanded={historialPedidoAbierto === pedido.id}
-  onClick={() => abrirHistorialPedido(pedido.id)}
-  className="mt-3 w-full rounded-lg border border-gray-300 bg-white py-2 font-semibold text-gray-700 hover:bg-gray-50"
->
-  {historialPedidoAbierto === pedido.id
-    ? 'Ocultar historial'
-    : 'Ver historial del pedido'}
-</button>
-
-{historialPedidoAbierto === pedido.id && (
-  <section
-    aria-label={`Historial del pedido ${pedido.id}`}
-    className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-4"
-  >
-    <h3 className="mb-3 font-bold text-gray-800">
-      Trazabilidad del pedido
-    </h3>
-
-    {cargandoHistorial ? (
-      <p className="text-sm text-gray-600">Cargando historial...</p>
-    ) : errorHistorial ? (
-      <p role="alert" className="text-sm font-medium text-red-600">
-        {errorHistorial}
-      </p>
-    ) : historialPedido.length === 0 ? (
-      <p className="text-sm text-gray-600">
-        El pedido aún no tiene cambios de estado registrados.
-      </p>
-    ) : (
-      <ol className="space-y-3">
-        {historialPedido.map((evento) => (
-          <li
-            key={evento.id}
-            className="border-l-2 border-[#7A1010] pl-3"
-          >
-            <p className="font-semibold text-gray-800">
-              {evento.estado_anterior ?? 'Creado'} → {evento.estado_nuevo}
-            </p>
-            <p className="text-sm text-gray-600">
-              {formatearFechaPedido(evento.fecha_cambio)} · Responsable: {evento.usuario}
-            </p>
-          </li>
-        ))}
-      </ol>
-    )}
-  </section>
-)}
-
-              {esAdministradora &&
-              !['Entregado', 'Cancelado'].includes(pedido.estado) && (
-                <button
-                  type="button"
-                  onClick={() => anularPedido(pedido.id)}
-                  className="mt-3 w-full rounded-lg bg-red-600 py-2 font-bold text-white hover:bg-red-700"
-                >
-                  Anular pedido
-                </button>
-              )}
-
-          </div>
+            pedido={pedido}
+            esAdministradora={esAdministradora}
+            motorizados={motorizados}
+            motorizadoSeleccionado={motorizadoSeleccionado[pedido.id]}
+            historialAbierto={historialPedidoAbierto === pedido.id}
+            historial={historialPedido}
+            cargandoHistorial={cargandoHistorial}
+            errorHistorial={errorHistorial}
+            formatearFecha={formatearFechaPedido}
+            onCambiarEstado={cambiarEstado}
+            onSeleccionarMotorizado={(pedidoId, motorizadoId) =>
+              setMotorizadoSeleccionado((actual) => ({
+                ...actual,
+                [pedidoId]: motorizadoId
+              }))
+            }
+            onAsignarMotorizado={asignarMotorizado}
+            onAbrirHistorial={abrirHistorialPedido}
+            onAnularPedido={anularPedido}
+          />
         ))}
       </div>
-      <div className="mt-6 flex flex-wrap items-center justify-center gap-4">
-  <button
-    type="button"
-    onClick={() => setPagina((actual) => Math.max(1, actual - 1))}
-    disabled={pagina <= 1}
-    className="rounded-lg bg-gray-800 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-  >
-    Anterior
-  </button>
-
-  <span className="text-sm text-gray-700">
-    Página {pagina} de {totalPaginas} · {totalPedidos} pedidos
-  </span>
-
-  <button
-    type="button"
-    onClick={() =>
-      setPagina((actual) => Math.min(totalPaginas, actual + 1))
-    }
-    disabled={pagina >= totalPaginas || totalPedidos === 0}
-    className="rounded-lg bg-gray-800 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-  >
-    Siguiente
-  </button>
-</div>
+      <PaginacionPedidos
+        pagina={pagina}
+        totalPaginas={totalPaginas}
+        totalPedidos={totalPedidos}
+        onCambiarPagina={setPagina}
+      />
     </div>
   );
 }
