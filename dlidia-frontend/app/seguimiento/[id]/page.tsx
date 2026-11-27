@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { API_URL } from '@/lib/api';
+import { apiFetch } from '@/lib/apiClient';
 import { socket } from '../../../lib/socket';
 
 interface EstadoPedido {
@@ -50,22 +50,25 @@ export default function SeguimientoPedido() {
     let activo = true;
 
     const cargarEstadoInicial = async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/pedidos/estado/${id}`);
+        try {
+      const data = await apiFetch<EstadoPedido>(
+        `/api/pedidos/estado/${id}`
+      );
 
-        if (!activo) return;
+      if (activo) setPedido(data);
+    } catch (err) {
+      if (activo) {
+        const mensaje = err instanceof Error ? err.message : '';
 
-        if (res.ok) {
-          const data = await res.json();
-          if (activo) setPedido(data);
-        } else {
-          if (activo) setError('No encontramos ese pedido.');
-        }
-      } catch {
-        if (activo) setError('Error de conexión al consultar tu pedido.');
-      } finally {
-        if (activo) setCargando(false);
+        setError(
+          mensaje.includes('404')
+            ? 'No encontramos ese pedido.'
+            : 'Error de conexión al consultar tu pedido.'
+        );
       }
+    } finally {
+      if (activo) setCargando(false);
+    }
     };
 
     const actualizarSeguimiento = (pedidoActualizado: {
