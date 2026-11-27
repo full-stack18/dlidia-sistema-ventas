@@ -2,7 +2,7 @@
 import * as jwtDecodeModule from 'jwt-decode';
 import { useEffect, useState } from 'react';
 import AdminNav from '../../components/AdminNav';
-import { API_URL } from '@/lib/api';
+import { apiFetch } from '@/lib/apiClient';
 
 interface Plato {
   id: number;
@@ -47,8 +47,7 @@ export default function PanelAdministradora() {
 
   const cargarPlatos = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/platos`);
-      const data = await res.json();
+      const data = await apiFetch<Plato[]>('/api/platos');
       setPlatos(data);
     } catch (error) {
       console.error("Error al cargar platos:", error);
@@ -57,43 +56,55 @@ export default function PanelAdministradora() {
 
   const guardarPlato = async (e: React.FormEvent) => {
     e.preventDefault();
-    const token = localStorage.getItem('dlidia_token');
-    const url = editando ? `${API_URL}/api/platos/${editando.id}` : `${API_URL}/api/platos`;
+
+    const ruta = editando
+      ? `/api/platos/${editando.id}`
+      : '/api/platos';
     const method = editando ? 'PUT' : 'POST';
 
-    await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ 
-        nombre, 
-        descripcion, 
-        precio: Number(precio), 
-        categoria, 
-        imagen_url: imagenUrl // <-- ENVIAMOS LA IMAGEN AL BACKEND
-      })
-    });
+    try {
+      await apiFetch<unknown>(ruta, {
+        method,
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          nombre,
+          descripcion,
+          precio: Number(precio),
+          categoria,
+          imagen_url: imagenUrl
+        })
+      });
 
-    setNombre('');
-    setDescripcion('');
-    setPrecio('');
-    setCategoria('Pollería');
-    setEditando(null);
-    setImagenUrl('/platos/default.jpg');
-    cargarPlatos();
+      setNombre('');
+      setDescripcion('');
+      setPrecio('');
+      setCategoria('Pollería');
+      setEditando(null);
+      setImagenUrl('/platos/default.jpg');
+      cargarPlatos();
+    } catch (error) {
+      alert(
+        error instanceof Error ? error.message : 'No se pudo guardar el plato.'
+      );
+    }
   };
 
   const eliminarPlato = async (id: number) => {
     if (!confirm('¿Seguro que deseas ocultar este plato del E-commerce?')) return;
-    const token = localStorage.getItem('dlidia_token');
 
-    await fetch(`${API_URL}/api/platos/${id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    cargarPlatos();
+    try {
+      await apiFetch<unknown>(`/api/platos/${id}`, {
+        method: 'DELETE'
+      });
+
+      cargarPlatos();
+    } catch (error) {
+      alert(
+        error instanceof Error ? error.message : 'No se pudo ocultar el plato.'
+      );
+    }
   };
 
  const editarPlato = (plato: Plato) => {
