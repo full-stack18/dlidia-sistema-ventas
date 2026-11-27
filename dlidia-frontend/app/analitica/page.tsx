@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import AdminNav from '../../components/AdminNav';
 import * as jwtDecodeModule from 'jwt-decode';
-import { API_URL } from '@/lib/api';
+import { apiFetch } from '@/lib/apiClient';
 
 type Numero = number | string;
 
@@ -121,23 +121,14 @@ export default function AnaliticaPage() {
       setError('');
 
       try {
-        const token = localStorage.getItem('dlidia_token');
+        const params = new URLSearchParams({
+          desde,
+          hasta
+        });
 
-        const res = await fetch(
-          `${API_URL}/api/analitica/resumen?desde=${desde}&hasta=${hasta}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          }
+        const data = await apiFetch<Analisis>(
+          `/api/analitica/resumen?${params.toString()}`
         );
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || 'No se pudo cargar el análisis');
-        }
-
         if (!cancelado) {
           setAnalisis(data);
         }
