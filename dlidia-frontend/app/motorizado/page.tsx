@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { socket } from '../../lib/socket';
-import { API_URL } from '@/lib/api';
+import { apiFetch } from '@/lib/apiClient';
 
 interface Pedido {
   id: number;
@@ -26,18 +26,8 @@ export default function MotorizadoApp() {
       }
 
       try {
-        const res = await fetch(`${API_URL}/api/pedidos/delivery`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        const data = await res.json();
-        if (res.ok) {
-          setPedidos(data);
-        } else {
-          setAutorizado(false);
-        }
+        const data = await apiFetch<Pedido[]>('/api/pedidos/delivery');
+        setPedidos(data);
       } catch (error) {
         console.error("Error:", error);
       }
@@ -66,29 +56,28 @@ export default function MotorizadoApp() {
   }, []);
 
   const marcarEntregado = async (id: number, nuevoEstado: string) => {
-    const token = localStorage.getItem('dlidia_token');
-    const res = await fetch(`${API_URL}/api/pedidos/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ estado: nuevoEstado })
-    });
+    try {
+      await apiFetch<unknown>(`/api/pedidos/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ estado: nuevoEstado })
+      });
 
-    if (res.ok) {
       if (nuevoEstado === 'Entregado') {
-        setPedidos(prev => prev.filter(p => p.id !== id));
+        setPedidos((prev) => prev.filter((p) => p.id !== id));
       } else {
-        setPedidos(prev =>
-          prev.map(p =>
-            p.id === id ? { ...p, estado: nuevoEstado } : p
-          )
+        setPedidos((prev) =>
+          prev.map((p) => (p.id === id ? { ...p, estado: nuevoEstado } : p))
         );
       }
-    } else {
-      const data = await res.json();
-      alert(data.error || 'No se pudo confirmar la entrega.');
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo confirmar la entrega.'
+      );
     }
   };
 
